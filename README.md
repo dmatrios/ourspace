@@ -14,7 +14,7 @@ npm run dev
 
 Configura la URL y la clave **publicable** del proyecto Supabase en `.env.local`. Si no están configuradas, la app muestra el estado de configuración pendiente. En el entorno en la nube puede usarse `npm ci --cache /tmp/ourspace-npm` si el caché predeterminado de npm no es escribible.
 
-Para usar cuentas y persistencia, aplica la migración primero en Supabase local o en un entorno de pruebas. La migración activa una lista privada de correos autorizados. Añade los dos correos en minúsculas desde una conexión administrativa al entorno correspondiente:
+Para usar cuentas y persistencia, aplica las migraciones en orden primero en Supabase local o en un entorno de pruebas. La primera migración activa una lista privada de correos autorizados. Añade los dos correos en minúsculas desde una conexión administrativa al entorno correspondiente:
 
 ```sql
 insert into private.allowed_emails (email)
@@ -23,6 +23,12 @@ on conflict do nothing;
 ```
 
 Activa el proveedor de correo y configura la URL de la aplicación en los redirects de Supabase Auth. Para confirmar el correo, abre el enlace en el mismo navegador donde creaste la cuenta. Mantén el registro por correo habilitado en Auth para que los correos de la lista puedan crear sus cuentas. Las migraciones y la configuración de producción requieren revisión aparte.
+
+## Casa animada
+
+Puedes tocar el suelo o usar las flechas para mover al avatar. Los botones de dirección también admiten las teclas de flecha cuando tienen el foco. El color de la ropa se guarda en este navegador por cuenta. La opción de movimiento reducido del teléfono también se aplica a la casa.
+
+La decoración compartida (Bosque, Atardecer o Noche) se guarda en Supabase con una revisión para evitar sobrescribir cambios de la otra persona. Para habilitarla en una instalación con la primera migración aplicada, aplica `20261121000200_room_style.sql`. Mientras tanto, la casa funciona con la decoración Bosque.
 
 ## Desvinculación
 

@@ -18,7 +18,9 @@ before(async () => {
       $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     grant usage on schema auth to authenticated;
   `);
-  await db.exec(await readFile('supabase/migrations/20261121000100_first_space.sql', 'utf8'));
+  for (const migration of ['20261121000100_first_space.sql', '20261121000200_room_style.sql']) {
+    await db.exec(await readFile('supabase/migrations/' + migration, 'utf8'));
+  }
   await db.exec(`
     insert into private.allowed_emails values ('a@example.test'), ('b@example.test'), ('c@example.test');
     insert into auth.users values ('${a}', 'a@example.test'), ('${b}', 'b@example.test'), ('${c}', 'c@example.test');
@@ -72,6 +74,18 @@ test('invitación caduca, solo el dueño aprueba y el código se consume', async
   assert.equal(await value(a, 'select id from spaces'), await value(b, 'select id from spaces'));
 });
 
+test('la decoración tiene permisos de pareja y protege cambios simultáneos', async () => {
+  const home = await value(a, 'select id from spaces');
+  assert.equal(await value(a, "select save_room_style('sunset', 0)"), true);
+  assert.equal(await value(b, 'select palette from room_styles where space_id = $1', [home]), 'sunset');
+  assert.equal(await value(b, "select save_room_style('forest', 0)"), false);
+  assert.equal(await value(c, "select save_room_style('night', 1)"), false);
+  assert.deepEqual(await as(c, 'select * from room_styles'), []);
+  await assert.rejects(as(b, "update room_styles set palette = 'night'"), /permission denied/);
+  assert.equal(await value(b, "select save_room_style('night', 1)"), true);
+  assert.equal(await value(a, 'select revision from room_styles'), 2);
+});
+
 test('una tarea privada queda aislada, la compartida persiste y el exmiembro pierde acceso', async () => {
   const home = await value(a, 'select id from spaces');
   await as(a, 'insert into tasks(owner_id, title) values ($1, $2)', [a, 'Privada']);
@@ -86,8 +100,13 @@ test('una tarea privada queda aislada, la compartida persiste y el exmiembro pie
   assert.equal(await value(a, 'select title from tasks'), 'Privada');
   assert.equal(await value(a, 'select export_separated_space()'), null);
   assert.equal(await value(b, 'update tasks set completed = false where id = $1 returning completed', [shared]), undefined);
-  assert.deepEqual((await value(b, 'select export_separated_space()')).tasks.map(task => task.title), ['Compartida']);
+  assert.deepEqual(await as(a, 'select * from room_styles'), []);
+  assert.equal(await value(b, "select save_room_style('forest', 2)"), false);
+  const archive = await value(b, 'select export_separated_space()');
+  assert.deepEqual(archive.tasks.map(task => task.title), ['Compartida']);
+  assert.equal(archive.room.palette, 'night');
   assert.equal(await value(b, 'select settle_space(false)'), true);
+  assert.deepEqual((await db.query('select * from public.room_styles')).rows, []);
   assert.deepEqual(await as(b, 'select * from tasks'), []);
   assert.equal(await value(a, 'select title from tasks'), 'Privada');
 });
@@ -95,8 +114,11 @@ test('una tarea privada queda aislada, la compartida persiste y el exmiembro pie
 test('la persona que permanece puede conservar la casa y su historial', async () => {
   const { home } = await pair(a, b, 'b@example.test');
   await as(a, 'insert into tasks(owner_id, space_id, title) values ($1, $2, $3)', [a, home, 'Historial']);
+  assert.equal(await value(a, "select save_room_style('sunset', 0)"), true);
   assert.equal(await value(b, 'select leave_space()'), true);
   assert.equal(await value(a, 'select settle_space(true)'), true);
+  assert.equal(await value(a, 'select palette from room_styles'), 'sunset');
+  assert.equal(await value(a, "select save_room_style('forest', 1)"), true);
   assert.equal(await value(a, 'select state from spaces'), 'retained');
   assert.equal(await value(a, 'select title from tasks where space_id = $1', [home]), 'Historial');
   assert.deepEqual(await as(b, 'select * from tasks'), []);

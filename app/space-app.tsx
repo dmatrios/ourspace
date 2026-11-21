@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { connect } from '../lib/supabase';
+import { defaultRoomStyle, roomPalettes, type RoomPalette, type RoomStyle } from '../lib/room-style';
 
 const Room = dynamic(() => import('./room'), { ssr: false, loading: () => <div className="room-fallback">Cargando habitación…</div> });
 
@@ -94,6 +95,7 @@ export default function SpaceApp() {
 }
 
 function Workspace({ client, userId }: { client: Client; userId: string }) {
+  const [roomStyle, setRoomStyle] = useState<RoomStyle | null>(null);
   const [space, setSpace] = useState<Space | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [pending, setPending] = useState<string | null>(null);
@@ -114,12 +116,17 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
       client.rpc('pending_partner'),
     ]);
     if (current !== generation.current) return;
+    const style = home.data && home.data.state !== 'waiting'
+      ? await client.from('room_styles').select('palette,revision').eq('space_id', home.data.id).maybeSingle()
+      : null;
+    if (current !== generation.current) return;
     if (home.error || list.error || request.error) {
       setReadError(true);
       return;
     }
     setReadError(false);
     setSpace(home.data);
+    setRoomStyle(style && !style.error ? style.data ?? defaultRoomStyle : null);
     setTasks(list.data.filter((item) => item.space_id === null || item.space_id === home.data?.id));
     setPending(request.data);
     if (home.data?.state !== 'waiting') setInvite('');
@@ -201,7 +208,28 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
                 <p role="status">{completed} de {homeTasks.length} tareas de la casa completadas</p>
                 {homeTasks.length > 0 && <progress aria-label="Progreso de tareas de la casa" value={completed} max={homeTasks.length} />}
               </div>
-              <Room completed={completed} openTasks={() => setTab('tasks')} />
+              <Room key={space.id} userId={userId} completed={completed} palette={roomStyle?.palette ?? 'forest'} openTasks={() => setTab('tasks')} />
+              {canEditHome && roomStyle && (
+                <fieldset className="room-palettes" disabled={busy}>
+                  <legend>Decoración de la casa</legend>
+                  {(Object.keys(roomPalettes) as RoomPalette[]).map((palette) => (
+                    <button key={palette} type="button" className="secondary" aria-pressed={roomStyle.palette === palette}
+                      onClick={() => {
+                        if (roomStyle.palette === palette) return;
+                        void act(async () => {
+                          const { data, error } = await client.rpc('save_room_style', {
+                            palette_name: palette, expected_revision: roomStyle.revision,
+                          });
+                          if (error) throw error;
+                          setMessage(data ? 'Decoración guardada.' : 'La decoración cambió en otra sesión. Revisa la casa e inténtalo de nuevo.');
+                        });
+                      }}>
+                      <span aria-hidden="true" style={{ background: roomPalettes[palette].rug }} />
+                      {roomPalettes[palette].label}
+                    </button>
+                  ))}
+                </fieldset>
+              )}
               {space.state === 'paired' && <button className="text-button" disabled={busy} onClick={() => {
                 if (!window.confirm('¿Quieres desvincularte? Perderás acceso a la casa y sus tareas compartidas.')) return;
                 void act(async () => {
