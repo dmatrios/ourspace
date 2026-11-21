@@ -4,6 +4,7 @@ import type { Session } from '@supabase/supabase-js';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import CoupleOnboarding, { type CoupleOnboardingData } from './couple-onboarding';
 import { connect } from '../lib/supabase';
 import { defaultRoomStyle, roomPalettes, type RoomPalette, type RoomStyle } from '../lib/room-style';
 
@@ -95,6 +96,7 @@ export default function SpaceApp() {
 }
 
 function Workspace({ client, userId }: { client: Client; userId: string }) {
+  const [onboarding, setOnboarding] = useState<CoupleOnboardingData | null>(null);
   const [roomStyle, setRoomStyle] = useState<RoomStyle | null>(null);
   const [space, setSpace] = useState<Space | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -116,9 +118,12 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
       client.rpc('pending_partner'),
     ]);
     if (current !== generation.current) return;
-    const style = home.data && home.data.state !== 'waiting'
-      ? await client.from('room_styles').select('palette,revision').eq('space_id', home.data.id).maybeSingle()
-      : null;
+    const [style, introduction] = home.data && home.data.state !== 'waiting'
+      ? await Promise.all([
+        client.from('room_styles').select('palette,revision').eq('space_id', home.data.id).maybeSingle(),
+        client.rpc('get_couple_onboarding', { space_key: home.data.id }),
+      ])
+      : [null, null];
     if (current !== generation.current) return;
     if (home.error || list.error || request.error) {
       setReadError(true);
@@ -126,6 +131,7 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
     }
     setReadError(false);
     setSpace(home.data);
+    setOnboarding(introduction && !introduction.error ? introduction.data : null);
     setRoomStyle(style && !style.error ? style.data ?? defaultRoomStyle : null);
     setTasks(list.data.filter((item) => item.space_id === null || item.space_id === home.data?.id));
     setPending(request.data);
@@ -204,6 +210,13 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
           <h1>{hasHome ? 'Nuestra casa' : 'Crea su espacio'}</h1>
           {hasHome ? (
             <>
+              {onboarding && <CoupleOnboarding key={space.id} data={onboarding} paired={space.state === 'paired'}
+                canEdit={canEditHome} onSave={async (values) => {
+                  const { data, error } = await client.rpc('save_couple_onboarding', { space_key: space.id, ...values });
+                  if (error) throw error;
+                  await refresh();
+                  return data;
+                }} />}
               <div className="house-progress">
                 <p role="status">{completed} de {homeTasks.length} tareas de la casa completadas</p>
                 {homeTasks.length > 0 && <progress aria-label="Progreso de tareas de la casa" value={completed} max={homeTasks.length} />}

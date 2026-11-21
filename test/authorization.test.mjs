@@ -18,7 +18,7 @@ before(async () => {
       $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     grant usage on schema auth to authenticated;
   `);
-  for (const migration of ['20261121000100_first_space.sql', '20261121000200_room_style.sql']) {
+  for (const migration of ['20261121000100_first_space.sql', '20261121000200_room_style.sql', '20261121000300_couple_onboarding.sql']) {
     await db.exec(await readFile('supabase/migrations/' + migration, 'utf8'));
   }
   await db.exec(`
@@ -86,6 +86,27 @@ test('la decoración tiene permisos de pareja y protege cambios simultáneos', a
   assert.equal(await value(a, 'select revision from room_styles'), 2);
 });
 
+test('la bienvenida guarda cada presentación y protege la fecha compartida', async () => {
+  const home = await value(a, 'select id from spaces');
+  const save = (actor, ...values) => value(actor, 'select save_couple_onboarding($1,$2,$3,$4,$5,$6,$7,$8)', [home, ...values]);
+
+  assert.equal(await save(a, '  Ana ', 'Cocinar', 'Salir este mes', 'Viajar', '2024-01-12', null, 0), 'saved');
+  assert.equal(await save(c, 'Otra cuenta', '', '', '', null, null, 0), 'unavailable');
+  assert.equal(await value(c, 'select get_couple_onboarding($1)', [home]), null);
+  await assert.rejects(as(b, 'select * from private.couple_introductions'), /permission denied/);
+  assert.equal(await save(a, 'Ana', '', '', '', '2099-11-21', '2024-01-12', 1), 'invalid');
+  assert.equal(await save(b, 'Luis', 'Películas', 'Cocinar juntos', '', '2024-01-14', null, 0), 'date_conflict');
+  assert.equal(await save(b, 'Luis', 'Películas', 'Cocinar juntos', '', null, null, 0), 'saved');
+  assert.equal(await save(b, 'Otro nombre', '', '', '', null, null, 0), 'profile_conflict');
+  const story = await value(b, 'select get_couple_onboarding($1)', [home]);
+  assert.equal(story.relationship_since, '2024-01-12');
+  assert.deepEqual(story.introductions.map(({ display_name, is_mine }) => [display_name, is_mine]), [
+    ['Luis', true], ['Ana', false],
+  ]);
+  assert.equal(story.introductions[1].long_goals, 'Viajar');
+  assert.equal(await save(a, 'Ana', 'Cocinar', 'Salir este mes', 'Viajar juntos', '2024-01-12', '2024-01-12', 1), 'saved');
+});
+
 test('una tarea privada queda aislada, la compartida persiste y el exmiembro pierde acceso', async () => {
   const home = await value(a, 'select id from spaces');
   await as(a, 'insert into tasks(owner_id, title) values ($1, $2)', [a, 'Privada']);
@@ -99,14 +120,21 @@ test('una tarea privada queda aislada, la compartida persiste y el exmiembro pie
   assert.equal(await value(a, 'select leave_space()'), true);
   assert.equal(await value(a, 'select title from tasks'), 'Privada');
   assert.equal(await value(a, 'select export_separated_space()'), null);
+  assert.equal(await value(a, 'select get_couple_onboarding($1)', [home]), null);
+  assert.equal(await value(b, 'select save_couple_onboarding($1,$2,$3,$4,$5,$6,$7,$8)', [
+    home, 'Luis', '', '', '', null, null, 1,
+  ]), 'unavailable');
   assert.equal(await value(b, 'update tasks set completed = false where id = $1 returning completed', [shared]), undefined);
   assert.deepEqual(await as(a, 'select * from room_styles'), []);
   assert.equal(await value(b, "select save_room_style('forest', 2)"), false);
   const archive = await value(b, 'select export_separated_space()');
   assert.deepEqual(archive.tasks.map(task => task.title), ['Compartida']);
   assert.equal(archive.room.palette, 'night');
+  assert.equal(archive.onboarding.relationship_since, '2024-01-12');
+  assert.equal(archive.onboarding.introductions[0].long_goals, 'Viajar juntos');
   assert.equal(await value(b, 'select settle_space(false)'), true);
   assert.deepEqual((await db.query('select * from public.room_styles')).rows, []);
+  assert.deepEqual((await db.query('select * from private.couple_introductions')).rows, []);
   assert.deepEqual(await as(b, 'select * from tasks'), []);
   assert.equal(await value(a, 'select title from tasks'), 'Privada');
 });

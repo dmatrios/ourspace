@@ -130,3 +130,31 @@ p { color: var(--muted); line-height: 1.55; }
     to { opacity: 1; transform: translateY(0); }
   }
 }
+
+.couple-onboarding {
+  min-width: 0;
+  padding: clamp(.9rem, 3vw, 1.4rem);
+  background: #f0eccf;
+  border: 2px solid var(--wood);
+}
+.onboarding-heading p { font-size: .85rem; font-weight: 700; margin-bottom: .35rem; }
+.onboarding-heading h2, .couple-onboarding h3 { overflow-wrap: anywhere; }
+.couple-onboarding textarea {
+  width: 100%;
+  min-height: 5rem;
+  padding: .55rem .7rem;
+  border: 2px solid #927e63;
+  background: #fffdf0;
+  color: inherit;
+  font: inherit;
+  resize: vertical;
+}
+.onboarding-actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+.onboarding-edit { justify-self: start; }
+.introductions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: .75rem; padding: 0; margin: 0; list-style: none; }
+.introductions li { min-width: 0; padding: .85rem; background: var(--paper); border: 2px solid var(--shadow); }
+.introductions h3 { margin: 0; }
+.introductions dl { margin: .75rem 0 0; }
+.introductions dt { font-weight: 700; }
+.introductions dd { margin: 0 0 .65rem; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.introductions dd:last-child { margin-bottom: 0; }
