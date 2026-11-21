@@ -2,6 +2,7 @@
 
 import type { Session } from '@supabase/supabase-js';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { connect } from '../lib/supabase';
 
@@ -49,37 +50,46 @@ export default function SpaceApp() {
   }
 
   return (
-    <main className="shell">
+    <div className="shell">
+      <a href="#contenido" className="skip-link">Ir al contenido</a>
       <header className="topbar">
-        <div className="brand"><span aria-hidden="true">⌂</span> Our Space</div>
+        <div className="brand"><Image src="/icon-192.png" width={34} height={34} alt="" /> Our Space</div>
         {session && client && <button className="secondary" onClick={async () => {
           const { error } = await client.auth.signOut();
           if (error) setMessage('No se pudo cerrar la sesión. Inténtalo de nuevo.');
         }}>Cerrar sesión</button>}
       </header>
-      {message && <p role="status" className="notice">{message}</p>}
-      {!client ? (
-        <section className="panel welcome">
-          <h1>Prepara tu espacio</h1>
-          <p>Configura la conexión con Supabase para acceder a la casa y a tus tareas.</p>
-        </section>
-      ) : session === undefined ? <p role="status">Comprobando sesión…</p> : session ? (
-        <Workspace key={session.user.id} client={client} userId={session.user.id} />
-      ) : (
-        <section className="panel welcome">
-          <h1>{register ? 'Crea tu cuenta' : 'Entra a tu espacio'}</h1>
-          <form onSubmit={authenticate} className="stack">
-            <label>Correo electrónico<input name="email" type="email" autoComplete="email" required /></label>
-            <label>Contraseña<input name="password" type="password" minLength={register ? 8 : undefined}
-              autoComplete={register ? 'new-password' : 'current-password'} required /></label>
-            <button disabled={busy}>{register ? 'Crear cuenta' : 'Iniciar sesión'}</button>
-          </form>
-          <button className="text-button" onClick={() => { setRegister(!register); setMessage(''); }}>
-            {register ? 'Ya tengo una cuenta' : 'Crear una cuenta'}
-          </button>
-        </section>
-      )}
-    </main>
+      <main id="contenido" tabIndex={-1}>
+        {message && <p role="status" className="notice">{message}</p>}
+        {!client ? (
+          <section className="panel welcome">
+            <h1>Prepara tu espacio</h1>
+            <p>Configura la conexión con Supabase para acceder a la casa y a tus tareas.</p>
+          </section>
+        ) : session === undefined ? <p role="status">Comprobando sesión…</p> : session ? (
+          <Workspace key={session.user.id} client={client} userId={session.user.id} />
+        ) : (
+          <section className="entry">
+            <div className="cabin">
+              <Image src="/cabin-pixel.png" alt="" width={240} height={164} unoptimized preload />
+            </div>
+            <div className="panel welcome">
+              <h1>{register ? 'Crea tu cuenta' : 'Entra a su casa'}</h1>
+              <p>Una casa virtual para organizar su día a día juntos.</p>
+              <form onSubmit={authenticate} className="stack">
+                <label>Correo electrónico<input name="email" type="email" autoComplete="email" spellCheck={false} required /></label>
+                <label>Contraseña<input name="password" type="password" minLength={register ? 8 : undefined}
+                  autoComplete={register ? 'new-password' : 'current-password'} required /></label>
+                <button disabled={busy}>{busy ? 'Conectando…' : register ? 'Crear cuenta' : 'Iniciar sesión'}</button>
+              </form>
+              <button className="text-button" onClick={() => { setRegister(!register); setMessage(''); }}>
+                {register ? 'Ya tengo una cuenta' : 'Crear una cuenta'}
+              </button>
+            </div>
+          </section>
+        )}
+      </main>
+    </div>
   );
 }
 
@@ -187,7 +197,10 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
           <h1>{hasHome ? 'Nuestra casa' : 'Crea su espacio'}</h1>
           {hasHome ? (
             <>
-              <p>{completed} de {homeTasks.length} tareas de la casa completadas</p>
+              <div className="house-progress">
+                <p role="status">{completed} de {homeTasks.length} tareas de la casa completadas</p>
+                {homeTasks.length > 0 && <progress aria-label="Progreso de tareas de la casa" value={completed} max={homeTasks.length} />}
+              </div>
               <Room completed={completed} openTasks={() => setTab('tasks')} />
               {space.state === 'paired' && <button className="text-button" disabled={busy} onClick={() => {
                 if (!window.confirm('¿Quieres desvincularte? Perderás acceso a la casa y sus tareas compartidas.')) return;
