@@ -1,0 +1,47 @@
+{
+  "name": "ourspace",
+  "version": "1.0.0",
+  "description": "Aplicación de pareja con mundo virtual 3D, finanzas, metas y organización compartida.",
+  "scripts": {
+    "test": "node --test",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dmatrios/ourspace.git"
+  },
+  "keywords": [],
+  "author": "",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/dmatrios/ourspace/issues"
+  },
+  "homepage": "https://github.com/dmatrios/ourspace#readme",
+  "private": true,
+  "dependencies": {
+    "@react-three/fiber": "^9.8.2",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.119.2",
+    "next": "^16.4.6",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.17",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.187.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.4.6",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=24 <25"
+  }
+}
