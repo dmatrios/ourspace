@@ -18,6 +18,8 @@ export default function SpaceApp() {
   const [client] = useState(connect);
   const [session, setSession] = useState<Session | null>();
   const [register, setRegister] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirmation, setShowPasswordConfirmation] = useState(false);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -36,13 +38,22 @@ export default function SpaceApp() {
     const form = new FormData(event.currentTarget);
     const email = String(form.get('email')).trim();
     const password = String(form.get('password'));
+    if (register && password !== String(form.get('password_confirmation'))) {
+      setMessage('Las contraseñas no coinciden.');
+      return;
+    }
     setBusy(true);
     setMessage('');
     try {
       const result = register
         ? await client.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin } })
         : await client.auth.signInWithPassword({ email, password });
-      if (result.error) setMessage(register ? 'No se pudo crear la cuenta. Comprueba que tu correo esté autorizado.' : 'No se pudo iniciar sesión. Revisa tu correo y contraseña.');
+      if (result.error) {
+        const unauthorized = register && result.error.message.toLowerCase().includes('registration is limited');
+        setMessage(unauthorized
+          ? 'Este correo todavía no está autorizado para Our Space. Pide que lo añadan antes de registrarte.'
+          : register ? 'No se pudo crear la cuenta. Revisa el correo y que la contraseña cumpla los requisitos.' : 'No se pudo iniciar sesión. Revisa tu correo y contraseña.');
+      }
       else if (register && !result.data.session) setMessage('Revisa tu correo y abre el enlace en este navegador.');
     } catch {
       setMessage('No se pudo completar la conexión. Inténtalo de nuevo.');
@@ -80,11 +91,35 @@ export default function SpaceApp() {
               <p>Una casa virtual para organizar su día a día juntos.</p>
               <form onSubmit={authenticate} className="stack">
                 <label>Correo electrónico<input name="email" type="email" autoComplete="email" spellCheck={false} required /></label>
-                <label>Contraseña<input name="password" type="password" minLength={register ? 8 : undefined}
-                  autoComplete={register ? 'new-password' : 'current-password'} required /></label>
+                <label>Contraseña
+                  <span className="password-field">
+                    <input name="password" type={showPassword ? 'text' : 'password'} minLength={register ? 8 : undefined}
+                      autoComplete={register ? 'new-password' : 'current-password'} required />
+                    <button type="button" className="secondary password-toggle" aria-pressed={showPassword}
+                      onClick={() => setShowPassword(!showPassword)}>{showPassword ? 'Ocultar' : 'Mostrar'}</button>
+                  </span>
+                </label>
+                {register && <>
+                  <label>Confirmar contraseña
+                    <span className="password-field">
+                      <input name="password_confirmation" type={showPasswordConfirmation ? 'text' : 'password'} minLength={8}
+                        autoComplete="new-password" required />
+                      <button type="button" className="secondary password-toggle" aria-pressed={showPasswordConfirmation}
+                        onClick={() => setShowPasswordConfirmation(!showPasswordConfirmation)}>
+                        {showPasswordConfirmation ? 'Ocultar' : 'Mostrar'}
+                      </button>
+                    </span>
+                  </label>
+                  <p className="auth-hint">Por seguridad, solo pueden registrarse los correos autorizados para esta pareja.</p>
+                </>}
                 <button disabled={busy}>{busy ? 'Conectando…' : register ? 'Crear cuenta' : 'Iniciar sesión'}</button>
               </form>
-              <button className="text-button" onClick={() => { setRegister(!register); setMessage(''); }}>
+              <button className="text-button" onClick={() => {
+                setRegister(!register);
+                setShowPassword(false);
+                setShowPasswordConfirmation(false);
+                setMessage('');
+              }}>
                 {register ? 'Ya tengo una cuenta' : 'Crear una cuenta'}
               </button>
             </div>

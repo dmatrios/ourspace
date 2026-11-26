@@ -65,6 +65,9 @@ p { color: var(--muted); line-height: 1.55; }
 .entry .welcome { align-content: center; width: 100%; margin: 0; border: 0; box-shadow: none; }
 .notice { border: 2px solid #bc9f64; background: #f1dfad; padding: .75rem; margin-bottom: .8rem; overflow-wrap: anywhere; }
 .stack { display: grid; gap: .85rem; }
+.password-field { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .45rem; align-items: stretch; }
+.password-toggle { padding-inline: .7rem; }
+.auth-hint { font-size: .9rem; }
 .pair-grid { display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); }
 .invite { overflow-wrap: anywhere; padding: .75rem; background: #eee0b9; border: 2px dashed #9b825b; font-family: ui-monospace, monospace; }
 .tabs { display: flex; gap: .55rem; margin-bottom: 1rem; }
