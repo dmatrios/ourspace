@@ -3,6 +3,7 @@
 import { Canvas, useFrame } from '@react-three/fiber';
 import { useEffect, useRef, useState } from 'react';
 import type { Group } from 'three';
+import PixelSelect, { type PixelSelectOption } from './pixel-select';
 import { roomPalettes, type RoomPalette } from '../lib/room-style';
 
 type Position = [number, number, number];
@@ -15,6 +16,11 @@ type Destination = { x: number; z: number };
 
 const avatarColors = { sage: '#668663', plum: '#946085', ocean: '#52758a' };
 type AvatarColor = keyof typeof avatarColors;
+const avatarColorOptions: PixelSelectOption[] = [
+  { value: 'sage', label: 'Verde' },
+  { value: 'plum', label: 'Ciruela' },
+  { value: 'ocean', label: 'Azul' },
+];
 
 function Avatar({ destination, color, reducedMotion }: {
   destination: Destination; color: string; reducedMotion: boolean;
@@ -159,15 +165,12 @@ export default function Room({ completed, palette, userId, openTasks }: {
             <button className="secondary" key={key} type="button" aria-label={label} onClick={() => move(dx, dz)}>{symbol}</button>
           ))}
         </div>
-        <label className="avatar-color">Ropa
-          <select value={avatarColor} onChange={(event) => {
-            const color = event.currentTarget.value as AvatarColor;
+        <PixelSelect className="avatar-color" label="Ropa" name="avatar-color" value={avatarColor}
+          options={avatarColorOptions} onValueChange={(value) => {
+            const color = value as AvatarColor;
             setAvatarColor(color);
             try { localStorage.setItem(avatarPreference, color); } catch { /* Optional preference. */ }
-          }}>
-            <option value="sage">Verde</option><option value="plum">Ciruela</option><option value="ocean">Azul</option>
-          </select>
-        </label>
+          }} />
         <button className="desk-button" onClick={openTasks}>Abrir tareas del escritorio</button>
       </div>
     </div>

@@ -5,6 +5,8 @@ import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import CoupleOnboarding, { type CoupleOnboardingData } from './couple-onboarding';
+import InvitationActions from './invitation-actions';
+import PixelSelect, { type PixelSelectOption } from './pixel-select';
 import { connect } from '../lib/supabase';
 import { defaultRoomStyle, roomPalettes, type RoomPalette, type RoomStyle } from '../lib/room-style';
 
@@ -13,6 +15,11 @@ const Room = dynamic(() => import('./room'), { ssr: false, loading: () => <div c
 type Client = NonNullable<ReturnType<typeof connect>>;
 type Space = { id: string; state: 'waiting' | 'paired' | 'separated' | 'retained' };
 type Task = { id: string; space_id: string | null; title: string; completed: boolean; created_at: string };
+
+const taskVisibilityOptions: PixelSelectOption[] = [
+  { value: 'personal', label: 'Solo yo' },
+  { value: 'home', label: 'Compartida' },
+];
 
 export default function SpaceApp() {
   const [client] = useState(connect);
@@ -147,6 +154,7 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
   const [readError, setReadError] = useState(false);
   const [busy, setBusy] = useState(false);
   const [exported, setExported] = useState(false);
+  const [taskScope, setTaskScope] = useState('personal');
   const generation = useRef(0);
 
   const refresh = useCallback(async () => {
@@ -207,7 +215,7 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
   function join(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
-    const code = String(new FormData(form).get('code'));
+    const code = String(new FormData(form).get('code')).trim();
     void act(async () => {
       const { data, error } = await client.rpc('request_invitation', { invite_code: code });
       if (error) throw error;
@@ -228,6 +236,7 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
       });
       if (error) throw error;
       form.reset();
+      setTaskScope('personal');
     });
   }
 
@@ -324,7 +333,11 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
               <div className="stack">
                 <h2>Invitar a mi pareja</h2>
                 <p>Comparte el código en privado. Caduca en 24 horas.</p>
-                {invite && <output className="invite">{invite}</output>}
+                {invite && <div className="invite-card">
+                  <span className="invite-caption">Código de invitación</span>
+                  <output className="invite" aria-label="Código de invitación">{invite}</output>
+                  <InvitationActions code={invite} />
+                </div>}
                 {pending && <button disabled={busy} onClick={() => void act(async () => {
                   const { data, error } = await client.rpc('approve_partner', { expected_email: pending });
                   if (error || !data) throw error ?? new Error('Request changed');
@@ -334,13 +347,20 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
                   void act(async () => {
                     const { data, error } = await client.rpc('issue_invitation');
                     if (error) throw error;
+                    if (typeof data !== 'string' || !/^\d{6}$/.test(data)) {
+                      setInvite('');
+                      setMessage('La base de datos aún genera códigos antiguos. Aplica la migración pendiente para habilitar códigos de 6 dígitos.');
+                      return;
+                    }
                     setInvite(data);
                   });
                 }}>{space ? 'Generar otro código' : 'Crear espacio y código'}</button>
               </div>
               {!space && <form onSubmit={join} className="stack">
                 <h2>Unirme a un espacio</h2>
-                <label>Código de invitación<input name="code" autoCapitalize="characters" autoComplete="off" spellCheck={false} required /></label>
+                <label>Código de invitación<input name="code" inputMode="numeric" autoComplete="one-time-code"
+                  pattern="[0-9]{6}" minLength={6} maxLength={6} placeholder="000000" aria-describedby="invite-code-help" required /></label>
+                <p id="invite-code-help" className="field-hint">Escribe los 6 dígitos que te compartieron.</p>
                 <button disabled={busy} className="secondary">Enviar solicitud</button>
               </form>}
             </div>
@@ -351,8 +371,11 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
           <h1>Tareas</h1>
           <form className="task-form" onSubmit={addTask}>
             <label>Nueva tarea<input name="title" maxLength={160} required placeholder="¿Qué hay que hacer?" /></label>
-            <label>Visibilidad<select name="scope" defaultValue="personal"><option value="personal">Solo yo</option>
-              {canEditHome && <option value="home">{space.state === 'retained' ? 'Casa conservada' : 'Compartida'}</option>}</select></label>
+            <PixelSelect label="Visibilidad" name="scope" onValueChange={setTaskScope}
+              options={canEditHome ? [taskVisibilityOptions[0], {
+                value: 'home', label: space.state === 'retained' ? 'Casa conservada' : 'Compartida',
+              }] : [taskVisibilityOptions[0]]}
+              value={canEditHome && taskScope === 'home' ? 'home' : 'personal'} />
             <button disabled={busy}>Añadir</button>
           </form>
           {tasks.length === 0 ? <p>Aún no hay tareas.</p> : (

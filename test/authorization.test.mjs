@@ -18,7 +18,7 @@ before(async () => {
       $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     grant usage on schema auth to authenticated;
   `);
-  for (const migration of ['20261121000100_first_space.sql', '20261121000200_room_style.sql', '20261121000300_couple_onboarding.sql']) {
+  for (const migration of ['20261121000100_first_space.sql', '20261121000200_room_style.sql', '20261121000300_couple_onboarding.sql', '20261126000200_six_digit_invitation_codes.sql']) {
     await db.exec(await readFile('supabase/migrations/' + migration, 'utf8'));
   }
   await db.exec(`
@@ -44,7 +44,7 @@ async function value(user, sql, params) {
 
 async function pair(owner, partner, email) {
   const code = await value(owner, 'select issue_invitation()');
-  assert.match(code, /^[0-9A-F]{32}$/);
+  assert.match(code, /^[0-9]{6}$/);
   assert.equal(await value(partner, 'select request_invitation($1)', [code]), true);
   assert.equal(await value(owner, 'select pending_partner()'), email);
   assert.equal(await value(owner, 'select approve_partner($1)', [email]), true);
