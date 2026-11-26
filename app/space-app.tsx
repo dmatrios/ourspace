@@ -49,10 +49,14 @@ export default function SpaceApp() {
         ? await client.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin } })
         : await client.auth.signInWithPassword({ email, password });
       if (result.error) {
-        const unauthorized = register && result.error.message.toLowerCase().includes('registration is limited');
-        setMessage(unauthorized
-          ? 'Este correo todavía no está autorizado para Our Space. Pide que lo añadan antes de registrarte.'
-          : register ? 'No se pudo crear la cuenta. Revisa el correo y que la contraseña cumpla los requisitos.' : 'No se pudo iniciar sesión. Revisa tu correo y contraseña.');
+        const authError = result.error.message.toLowerCase();
+        const emailDeliveryBlocked = register && /email[_ ]address[_ ]not[_ ]authorized/.test(authError);
+        const emailRateLimited = register && /over_email_send_rate_limit|email rate limit exceeded/.test(authError);
+        setMessage(emailDeliveryBlocked
+          ? 'Supabase no pudo enviar la confirmación a este correo. Configura SMTP para enviar correos externos.'
+          : emailRateLimited
+            ? 'Se alcanzó el límite temporal de correos de confirmación. Inténtalo más tarde.'
+            : register ? 'No se pudo crear la cuenta. Revisa el correo y que la contraseña cumpla los requisitos.' : 'No se pudo iniciar sesión. Revisa tu correo y contraseña.');
       }
       else if (register && !result.data.session) setMessage('Revisa tu correo y abre el enlace en este navegador.');
     } catch {
@@ -110,7 +114,7 @@ export default function SpaceApp() {
                       </button>
                     </span>
                   </label>
-                  <p className="auth-hint">Por seguridad, solo pueden registrarse los correos autorizados para esta pareja.</p>
+                  <p className="auth-hint">Te enviaremos un enlace para confirmar tu correo antes de iniciar sesión.</p>
                 </>}
                 <button disabled={busy}>{busy ? 'Conectando…' : register ? 'Crear cuenta' : 'Iniciar sesión'}</button>
               </form>

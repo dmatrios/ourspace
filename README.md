@@ -14,15 +14,9 @@ npm run dev
 
 Configura la URL y la clave **publicable** del proyecto Supabase en `.env.local`. Si no están configuradas, la app muestra el estado de configuración pendiente. En el entorno en la nube puede usarse `npm ci --cache /tmp/ourspace-npm` si el caché predeterminado de npm no es escribible.
 
-Para usar cuentas y persistencia, aplica las migraciones en orden primero en Supabase local o en un entorno de pruebas. La primera migración activa una lista privada de correos autorizados. Añade los dos correos en minúsculas desde una conexión administrativa al entorno correspondiente:
+Para usar cuentas y persistencia, aplica las migraciones en orden. La migración `20261126000100_open_email_registration.sql` desactiva el filtro de correos de la migración inicial y permite registrarse con cualquier correo. Mantén habilitados el registro por correo y **Confirm email** en Supabase Auth. Al registrarse, Our Space solicita un enlace de confirmación que vuelve al origen de la app; configura la URL de producción y `http://localhost:3000` en Site URL y Redirect URLs.
 
-```sql
-insert into private.allowed_emails (email)
-values ('persona1@example.test'), ('persona2@example.test')
-on conflict do nothing;
-```
-
-Activa el proveedor de correo y configura la URL de la aplicación en los redirects de Supabase Auth. Para confirmar el correo, abre el enlace en el mismo navegador donde creaste la cuenta. Mantén el registro por correo habilitado en Auth para que los correos de la lista puedan crear sus cuentas. Las migraciones y la configuración de producción requieren revisión aparte.
+El SMTP predeterminado de Supabase solo entrega a miembros del equipo de la organización y limita los envíos. Para confirmar correos personales externos, configura un proveedor SMTP en Authentication. No desactives la confirmación para evitar este requisito: eso marcaría como verificados correos que no se han comprobado.
 
 ## Casa animada
 
@@ -49,4 +43,4 @@ npm test
 npm run build
 ```
 
-Las pruebas ejecutan la migración real en PostgreSQL embebido (PGlite) con identidades Auth simuladas. Cubren el acceso por correo autorizado, la expiración y consumo de invitaciones, la aprobación del propietario, el aislamiento de tareas y las dos salidas tras desvincularse. La confirmación por correo y la instalación en Android y iPhone requieren una prueba con Supabase y dispositivos reales.
+Las pruebas con PostgreSQL embebido (PGlite) usan identidades Auth simuladas. Cubren la expiración y consumo de invitaciones, la aprobación del propietario, el aislamiento de tareas y las dos salidas tras desvincularse. La confirmación por correo y la instalación en Android y iPhone requieren una prueba con Supabase y dispositivos reales.
