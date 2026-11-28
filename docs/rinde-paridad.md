@@ -12,6 +12,7 @@ Referencia: [Rinde](https://github.com/dmatrios/Rinde), README de la iteración 
 | Kilometraje y vehículo | Implementado en código | Vehículo personal y lecturas por jornada. |
 | Ingresos diarios o por jornada e historial de cambios | Implementado en código | Revisiones y separación de cobros individuales. |
 | Cobros en efectivo, Yape, Plin y tarjeta; vuelto | Implementado en código | Vinculación por plataforma y horario de jornada. |
+| Registro de cobros y gastos por la pareja | Implementado en código | El repartidor concede y revoca un permiso; sólo se registran movimientos durante su jornada activa y se guarda quién los anotó. |
 | Saldo, arqueo, límite de efectivo y cierre de jornada | Implementado en código | Caja y diferencia separadas de la ganancia. |
 | Gastos y categorías personales | Implementado en código | Categorías propias, archivo y eliminación con reasignación. |
 | Gastos compartidos y quién pagó | Implementado | Ambos integrantes pueden ver el gasto y quién pagó. |

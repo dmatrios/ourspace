@@ -13,10 +13,10 @@ type Category = { id: string; name: string; kind: 'operational' | 'personal'; ac
 type Earning = { id: string; platform_id: string; shift_id: string | null; earned_on: string; mode: 'daily' | 'shift';
   reported_amount: string; tips: string; bonuses: string; tips_included: boolean; bonuses_included: boolean; orders: number; notes: string; revision: number };
 type Receipt = { id: string; platform_id: string; shift_id: string | null; amount: string; payment_method: string;
-  cash_received: string | null; description: string; occurred_at: string };
+  cash_received: string | null; description: string; occurred_at: string; entered_by: string | null };
 type Expense = { id: string; category_id: string; shift_id: string | null; amount: string; description: string;
   occurred_at: string; payment_method: string | null; cash_paid: string | null; ruc: string | null; notes: string;
-  recurring_id: string | null; due_date: string | null };
+  recurring_id: string | null; due_date: string | null; entered_by: string | null };
 type Fuel = { id: string; shift_id: string | null; amount: string; liters: string | null; odometer_km: string | null;
   full_tank: boolean; occurred_at: string; payment_method: string | null; cash_paid: string | null; notes: string };
 type Recurring = { id: string; category_id: string; description: string; amount: string; cadence: 'weekly' | 'monthly'; anchor_date: string; active: boolean };
@@ -173,8 +173,8 @@ export default function CourierFinance({ client, userId, platforms, shifts, earn
     const [categoriesList, earningsList, receiptsList, expensesList, fuelList, recurringList, historyList] = await Promise.all([
       allRows<Category>(client, 'courier_categories', 'id,name,kind,active'),
       allRows<Earning>(client, 'courier_earnings', 'id,platform_id,shift_id,earned_on,mode,reported_amount,tips,bonuses,tips_included,bonuses_included,orders,notes,revision'),
-      allRows<Receipt>(client, 'courier_receipts', 'id,platform_id,shift_id,amount,payment_method,cash_received,description,occurred_at'),
-      allRows<Expense>(client, 'courier_expenses', 'id,category_id,shift_id,amount,description,occurred_at,payment_method,cash_paid,ruc,notes,recurring_id,due_date'),
+      allRows<Receipt>(client, 'courier_receipts', 'id,platform_id,shift_id,amount,payment_method,cash_received,description,occurred_at,entered_by'),
+      allRows<Expense>(client, 'courier_expenses', 'id,category_id,shift_id,amount,description,occurred_at,payment_method,cash_paid,ruc,notes,recurring_id,due_date,entered_by'),
       allRows<Fuel>(client, 'courier_fuel', 'id,shift_id,amount,liters,odometer_km,full_tank,occurred_at,payment_method,cash_paid,notes'),
       allRows<Recurring>(client, 'courier_recurring', 'id,category_id,description,amount,cadence,anchor_date,active'),
       allRows<History>(client, 'courier_earnings_history', 'id,earning_id,before_value,after_value,changed_at'),
@@ -190,8 +190,10 @@ export default function CourierFinance({ client, userId, platforms, shifts, earn
 
   useEffect(() => {
     const update = () => { void refresh().catch(() => { setLoaded(true); setMessage('No se pudieron cargar los movimientos.'); }); };
-    const timer = window.setTimeout(update, 0);
-    return () => window.clearTimeout(timer);
+    const first = window.setTimeout(update, 0);
+    const timer = window.setInterval(() => { if (!document.hidden) update(); }, 10000);
+    window.addEventListener('focus', update);
+    return () => { window.clearTimeout(first); window.clearInterval(timer); window.removeEventListener('focus', update); };
   }, [refresh]);
 
   async function act(operation: () => Promise<void>, success: string) {
@@ -304,7 +306,8 @@ export default function CourierFinance({ client, userId, platforms, shifts, earn
       {receipts.length === 0 ? <p>Aún no hay cobros.</p> : <ul className="courier-list">{receipts.map((item) => <li key={item.id}>
         <strong>{asMoney(item.amount)} · {methods.find((method) => method.value === item.payment_method)?.label}</strong>
         <p>{dateTime.format(new Date(item.occurred_at))} · {platforms.find((p) => p.id === item.platform_id)?.name} · {item.shift_id ? 'Vinculado a jornada' : 'Sin jornada'}
-          {item.cash_received ? ` · Vuelto ${asMoney((cents(item.cash_received) - cents(item.amount)) / 100)}` : ''}</p>
+          {item.cash_received ? ` · Vuelto ${asMoney((cents(item.cash_received) - cents(item.amount)) / 100)}` : ''}
+          {item.entered_by && item.entered_by !== userId ? ' · Registrado por tu pareja' : ''}</p>
         {!item.shift_id && <PixelSelect label="Asociar a jornada" name={`receipt-${item.id}`} value="" options={shiftOptions.filter((option) =>
           option.value && shifts.some((s) => s.id === option.value && s.platform_id === item.platform_id && shiftAt(s, item.occurred_at)))}
           onValueChange={(value) => void act(async () => {
@@ -410,7 +413,8 @@ export default function CourierFinance({ client, userId, platforms, shifts, earn
       {expenses.length === 0 ? <p>Aún no hay gastos.</p> : <ul className="courier-list">{expenses.map((item) => <li key={item.id}>
         <strong>{item.description} · {asMoney(item.amount)}</strong>
         <p>{dateTime.format(new Date(item.occurred_at))} · {categories.find((cat) => cat.id === item.category_id)?.name}
-          {item.shift_id ? ' · Jornada' : ''} {item.ruc ? ` · RUC ${item.ruc}` : ''}</p>
+          {item.shift_id ? ' · Jornada' : ''} {item.ruc ? ` · RUC ${item.ruc}` : ''}
+          {item.entered_by && item.entered_by !== userId ? ' · Registrado por tu pareja' : ''}</p>
         <ExpenseEditor item={item} categories={categories} busy={busy} onSave={(data, categoryId, paymentMethod) => void act(async () => {
           const { error } = await client.from('courier_expenses').update({
             description: String(data.get('description') ?? '').trim(), amount: moneyInput(data.get('amount')),

@@ -25,7 +25,7 @@ before(async () => {
     create function realtime.topic() returns text language sql stable as
       $$ select current_setting('realtime.topic', true) $$;
   `);
-  for (const migration of ['20261121000100_first_space.sql', '20261121000200_room_style.sql', '20261121000300_couple_onboarding.sql', '20261126000200_six_digit_invitation_codes.sql', '20261127000100_onboarding_while_waiting.sql', '20261127000200_avatar_customization.sql', '20261127000300_task_backlog_details.sql', '20261127000400_expenses.sql', '20261127000500_live_room_presence.sql', '20261128000100_courier_role_avatar.sql', '20261128000200_courier_work.sql', '20261128000300_self_deletion.sql', '20261128000400_vehicle_odometer.sql']) {
+  for (const migration of ['20261121000100_first_space.sql', '20261121000200_room_style.sql', '20261121000300_couple_onboarding.sql', '20261126000200_six_digit_invitation_codes.sql', '20261127000100_onboarding_while_waiting.sql', '20261127000200_avatar_customization.sql', '20261127000300_task_backlog_details.sql', '20261127000400_expenses.sql', '20261127000500_live_room_presence.sql', '20261128000100_courier_role_avatar.sql', '20261128000200_courier_work.sql', '20261128000300_self_deletion.sql', '20261128000400_vehicle_odometer.sql', '20261128000500_partner_courier_logging.sql']) {
     await db.exec(await readFile('supabase/migrations/' + migration, 'utf8'));
   }
   await db.exec(`
@@ -206,6 +206,40 @@ test('finanzas de reparto evitan duplicados y referencias cruzadas', async () =>
   assert.equal(await value(a, 'select cash_counted from courier_count_cash($1, 27)', [shift]), '27.00');
 });
 
+test('la pareja registra cobros y gastos sólo con permiso y en jornada activa', async () => {
+  const platform = await value(a, "select id from courier_platforms where name = 'PedidosYa'");
+  await as(a, 'update courier_accounts set enabled = true where user_id = $1', [a]);
+  assert.equal(await value(b, 'select courier_partner_context()'), null);
+  await assert.rejects(as(b, "select courier_partner_add_receipt($1, 10, 'cash')", [
+    '00000000-0000-4000-8000-000000000010',
+  ]), /unavailable/);
+  await as(a, 'update courier_accounts set allow_partner_logging = true where user_id = $1', [a]);
+  const shift = await value(a, 'select id from courier_start_shift($1, 112, 0)', [platform]);
+  const context = await value(b, 'select courier_partner_context()');
+  assert.equal(context.user_id, a);
+  assert.equal(context.shift.id, shift);
+  assert.equal(context.platforms.find((item) => item.id === platform)?.name, 'PedidosYa');
+  assert.equal(await value(c, 'select courier_partner_context()'), null);
+  await assert.rejects(as(c, "select courier_partner_add_receipt($1, 10, 'cash')", [shift]), /unavailable/);
+  await assert.rejects(as(b, "select courier_partner_add_receipt($1, 10, 'cash')", [
+    '00000000-0000-4000-8000-000000000010',
+  ]), /Active shift unavailable/);
+  const receipt = await value(b, "select courier_partner_add_receipt($1, 10, 'cash', 20, 'Pedido')", [shift]);
+  assert.equal(await value(a, 'select entered_by from courier_receipts where id = $1', [receipt]), b);
+  assert.deepEqual(await as(b, 'select * from courier_receipts where id = $1', [receipt]), []);
+  const category = context.categories[0].id;
+  const expense = await value(b, "select courier_partner_add_expense($1,$2,5,'Peaje','cash',5)", [shift, category]);
+  assert.equal(await value(a, 'select entered_by from courier_expenses where id = $1', [expense]), b);
+  assert.equal((await value(b, 'select courier_partner_context()')).recent.length, 2);
+  await as(a, 'update courier_accounts set allow_partner_logging = false where user_id = $1', [a]);
+  assert.equal(await value(b, 'select courier_partner_context()'), null);
+  await assert.rejects(as(b, "select courier_partner_add_expense($1,$2,5,'Peaje')", [shift, category]), /unavailable/);
+  await as(a, 'select courier_transition_shift($1,$2,$3)', [shift, 'finish', 113]);
+  await as(a, 'update courier_accounts set allow_partner_logging = true where user_id = $1', [a]);
+  assert.equal((await value(b, 'select courier_partner_context()')).shift, null);
+  await assert.rejects(as(b, "select courier_partner_add_receipt($1, 10, 'cash')", [shift]), /Active shift unavailable/);
+});
+
 test('una tarea privada queda aislada, la compartida persiste y el exmiembro pierde acceso', async () => {
   const home = await value(a, 'select id from spaces');
   await as(a, 'insert into tasks(owner_id, title) values ($1, $2)', [a, 'Privada']);
@@ -217,6 +251,7 @@ test('una tarea privada queda aislada, la compartida persiste y el exmiembro pie
   assert.equal(await value(a, 'update tasks set completed = true where id = $1 returning completed', [shared]), true);
   assert.equal(await value(b, 'select completed from tasks where id = $1', [shared]), true);
   assert.equal(await value(a, 'select leave_space()'), true);
+  assert.equal(await value(b, 'select courier_partner_context()'), null);
   assert.deepEqual(await asRealtime(a, `ourspace:room:${home}`, 'select extension from realtime.messages'), []);
   assert.deepEqual(await asRealtime(b, `ourspace:room:${home}`, 'select extension from realtime.messages'), []);
   assert.equal(await value(a, 'select title from tasks'), 'Privada');

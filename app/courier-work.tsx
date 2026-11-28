@@ -4,11 +4,12 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import PixelSelect from './pixel-select';
 import CourierFinance from './courier-finance';
 import CourierReports from './courier-reports';
+import CourierPartnerLog from './courier-partner-log';
 import { connect } from '../lib/supabase';
 import { allRows } from '../lib/supabase-pages';
 
 type Client = NonNullable<ReturnType<typeof connect>>;
-type Account = { user_id: string; enabled: boolean; display_name: string | null; earning_mode: 'daily' | 'shift'; weekly_goal: string | null };
+type Account = { user_id: string; enabled: boolean; allow_partner_logging: boolean; display_name: string | null; earning_mode: 'daily' | 'shift'; weekly_goal: string | null };
 type Platform = { id: string; name: string; active: boolean; cash_limit: string | null };
 type Vehicle = { name: string; odometer_km: string | null };
 type Shift = { id: string; platform_id: string; status: 'active' | 'paused' | 'completed'; started_at: string; ended_at: string | null;
@@ -29,8 +30,8 @@ function localDateTime(value: string) {
     day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value)).replace(' ', 'T').slice(0, 16);
 }
 
-export default function CourierWork({ client, userId, onRoleChange }: {
-  client: Client; userId: string; onRoleChange: () => Promise<void>;
+export default function CourierWork({ client, userId, paired, onRoleChange }: {
+  client: Client; userId: string; paired: boolean; onRoleChange: () => Promise<void>;
 }) {
   const [account, setAccount] = useState<Account | null>(null);
   const [platforms, setPlatforms] = useState<Platform[]>([]);
@@ -50,7 +51,7 @@ export default function CourierWork({ client, userId, onRoleChange }: {
 
   const refresh = useCallback(async () => {
     const [profile, available, transport, history, breaks] = await Promise.all([
-      client.from('courier_accounts').select('user_id,enabled,display_name,earning_mode,weekly_goal').eq('user_id', userId).maybeSingle(),
+      client.from('courier_accounts').select('user_id,enabled,allow_partner_logging,display_name,earning_mode,weekly_goal').eq('user_id', userId).maybeSingle(),
       allRows<Platform>(client, 'courier_platforms', 'id,name,active,cash_limit'),
       client.from('courier_vehicles').select('name,odometer_km').eq('user_id', userId).maybeSingle(),
       allRows<Shift>(client, 'courier_shifts', 'id,platform_id,status,started_at,ended_at,odometer_start,odometer_end,opening_cash,cash_counted'),
@@ -108,7 +109,7 @@ export default function CourierWork({ client, userId, onRoleChange }: {
   async function setRole(enabled: boolean) {
     await act(async () => {
       const { error } = account
-        ? await client.from('courier_accounts').update({ enabled }).eq('user_id', userId)
+        ? await client.from('courier_accounts').update({ enabled, ...(enabled ? {} : { allow_partner_logging: false }) }).eq('user_id', userId)
         : await client.from('courier_accounts').insert({ user_id: userId, enabled });
       if (error) throw error;
       await onRoleChange();
@@ -152,7 +153,7 @@ export default function CourierWork({ client, userId, onRoleChange }: {
 
   return <section className="panel courier-panel">
     <h1>Trabajo de reparto</h1>
-    <p>Tus jornadas, cobros y gastos de trabajo son privados. Tu pareja sólo ve tu skin de repartidor cuando la eliges en la casa.</p>
+    <p>Tus jornadas, cobros y gastos de trabajo son privados. Si lo autorizas, tu pareja podrá registrar movimientos durante una jornada activa.</p>
     {message && <p role="status" className="notice">{message}</p>}
     {!loaded ? <p role="status">Cargando trabajo…</p> : <>
       <div className="courier-role-card">
@@ -264,6 +265,16 @@ export default function CourierWork({ client, userId, onRoleChange }: {
         {section === 'reportes' && <CourierReports client={client} platforms={platforms} weeklyGoal={account.weekly_goal} />}
         {section === 'ajustes' && <div className="courier-section">
           <h2>Preferencias personales</h2>
+          {paired && <div className="courier-role-card">
+            <div><strong>Registro asistido por mi pareja</strong>
+              <p>Podrá añadir cobros y gastos de trabajo a tu jornada activa. No podrá cerrarla ni cambiar tus ajustes o reportes. Puedes quitar el permiso cuando quieras.</p></div>
+            <button type="button" className={account.allow_partner_logging ? 'secondary' : ''} disabled={busy}
+              onClick={() => void act(async () => { const { error } = await client.from('courier_accounts')
+                .update({ allow_partner_logging: !account.allow_partner_logging }).eq('user_id', userId);
+                if (error) throw error;
+              }, account.allow_partner_logging ? 'Permiso retirado.' : 'Tu pareja ya puede registrar movimientos durante tus jornadas.')}
+            >{account.allow_partner_logging ? 'Quitar permiso' : 'Permitir registro'}</button>
+          </div>}
           <form className="courier-form" onSubmit={saveProfile}>
             <label>Nombre en el trabajo<input name="display_name" maxLength={80} defaultValue={account.display_name ?? ''} /></label>
             <PixelSelect label="Registrar ingresos por" name="earning_mode" value={earningMode}
@@ -299,6 +310,7 @@ export default function CourierWork({ client, userId, onRoleChange }: {
           </form>
         </div>}
       </>}
+      {paired && <CourierPartnerLog client={client} />}
     </>}
   </section>;
 }

@@ -620,7 +620,7 @@ function Workspace({ client, userId, email }: { client: Client; userId: string; 
       ) : tab === 'expenses' ? (
         <Expenses client={client} userId={userId} spaceId={space?.id ?? null} canEditHome={canEditHome} />
       ) : (
-        <CourierWork client={client} userId={userId} onRoleChange={refreshAvatar} />
+        <CourierWork client={client} userId={userId} paired={space?.state === 'paired'} onRoleChange={refreshAvatar} />
       )}
     </>
   );

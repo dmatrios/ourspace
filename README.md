@@ -46,7 +46,9 @@ En **Reparto**, cada integrante puede activar su propio rol de repartidor. Al ac
 
 El módulo permite registrar plataformas y límite de efectivo, vehículo y odómetro, jornadas con pausas y corrección de horarios, cobros por efectivo/Yape/Plin/tarjeta, ingresos diarios o por jornada con historial de ediciones, gastos, categorías, recurrencias confirmadas, combustible y arqueo. Los reportes por día, semana y mes separan cobros de ingresos, muestran meta semanal y productividad, y descargan un PDF. Los borradores de cobros y gastos se guardan sólo al pulsar **Guardar borrador** en ese navegador y caducan a los siete días.
 
-Aplica en orden `20261128000100_courier_role_avatar.sql`, `20261128000200_courier_work.sql`, `20261128000300_self_deletion.sql` y `20261128000400_vehicle_odometer.sql`. La cuenta se puede borrar desde **Mi cuenta** después de resolver las dependencias de una casa o gastos compartidos. El enlace de recuperación de contraseña usa el origen de la app como destino; comprueba que ese origen esté autorizado en Supabase Auth.
+Con la pareja vinculada, quien reparte puede activar **Registro asistido por mi pareja** en Reparto → Ajustes. La otra persona podrá anotar cobros y gastos de trabajo durante una jornada activa desde **Registrar para mi pareja**. El permiso se puede retirar en cualquier momento; la otra persona no obtiene acceso a los reportes, la configuración ni el cierre de jornada. Cada movimiento conserva quién lo registró.
+
+Aplica en orden `20261128000100_courier_role_avatar.sql`, `20261128000200_courier_work.sql`, `20261128000300_self_deletion.sql`, `20261128000400_vehicle_odometer.sql` y `20261128000500_partner_courier_logging.sql`. La cuenta se puede borrar desde **Mi cuenta** después de resolver las dependencias de una casa o gastos compartidos. El enlace de recuperación de contraseña usa el origen de la app como destino; comprueba que ese origen esté autorizado en Supabase Auth.
 
 ## Google Calendar
 
