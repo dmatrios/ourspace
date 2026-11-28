@@ -1,16 +1,16 @@
 # Roadmap de producto de Our Space
 
-Esta lista recoge las funciones solicitadas para la app de pareja. Es un plan de entregas, no una afirmación de que ya estén implementadas. El primer cambio en curso permite completar la presentación personal mientras el hogar espera la vinculación.
+Esta lista recoge las funciones solicitadas para la app de pareja y el estado actual de cada entrega.
 
 ## Fase 1: bienvenida y navegación
 
-- [ ] Mostrar el onboarding personal en pasos: nombre preferido, preguntas personales, gustos e ideas de metas.
+- [x] Mostrar el onboarding personal en pasos: nombre preferido, preguntas personales, gustos e ideas de metas.
 - [ ] Hacer más intuitivo el panel principal y dejar espacio para pantallas dedicadas sin comprimir los flujos.
 - [ ] Mantener una navegación clara y cómoda en móvil y escritorio.
 
 ## Fase 2: tareas, metas y calendario
 
-- [ ] Backlog con prioridad, fecha, requisitos y recursos necesarios para completar cada tarea.
+- [x] Backlog con prioridad, fecha, requisitos y recursos necesarios para completar cada tarea.
 - [ ] Vistas de tareas para hoy, mañana y una fecha seleccionada, ordenadas por prioridad.
 - [ ] Integración con Google Calendar y recordatorios, con autorización OAuth individual y revocable.
 - [ ] Metas compartidas con porcentaje de avance, barra de progreso y reflejo del progreso en la casa.
@@ -26,7 +26,7 @@ Esta lista recoge las funciones solicitadas para la app de pareja. Es un plan de
 
 ## Fase 4: avatares, casa y recompensas
 
-- [ ] Personalizar cabello, forma/estilo del avatar y ropa.
+- [x] Personalizar cabello, forma/estilo del avatar y ropa.
 - [ ] Desbloquear skins, logros y decoración por progreso de metas y tiempo de uso.
 - [ ] Mover y colocar muebles y objetos en la casa compartida.
 

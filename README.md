@@ -1,6 +1,6 @@
 # Our Space
 
-Aplicación privada para dos personas. La primera entrega integra cuentas, vinculación por invitación, tareas personales y compartidas y una habitación 3D. El escritorio abre la misma lista de tareas que la vista tradicional. La casa muestra el progreso de las tareas compartidas.
+Aplicación privada para dos personas. La primera entrega integra cuentas, vinculación por invitación, tareas personales y compartidas y una habitación 3D. Las tareas incluyen prioridad, fecha límite y requisitos, y se pueden editar desde el backlog. La casa muestra el progreso de las tareas compartidas y permite personalizar el avatar.
 
 ## Desarrollo
 

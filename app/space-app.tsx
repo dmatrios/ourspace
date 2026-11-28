@@ -15,7 +15,17 @@ const Room = dynamic(() => import('./room'), { ssr: false, loading: () => <div c
 
 type Client = NonNullable<ReturnType<typeof connect>>;
 type Space = { id: string; state: 'waiting' | 'paired' | 'separated' | 'retained' };
-type Task = { id: string; space_id: string | null; title: string; completed: boolean; created_at: string };
+type TaskPriority = 'high' | 'medium' | 'low';
+type Task = {
+  id: string; space_id: string | null; title: string; completed: boolean;
+  priority: TaskPriority; due_on: string | null; requirements: string | null; created_at: string;
+};
+
+const taskPriorityOptions: PixelSelectOption[] = [
+  { value: 'high', label: 'Alta' },
+  { value: 'medium', label: 'Normal' },
+  { value: 'low', label: 'Baja' },
+];
 
 const taskVisibilityOptions: PixelSelectOption[] = [
   { value: 'personal', label: 'Solo yo' },
@@ -159,6 +169,9 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
   const [busy, setBusy] = useState(false);
   const [exported, setExported] = useState(false);
   const [taskScope, setTaskScope] = useState('personal');
+  const [newTaskPriority, setNewTaskPriority] = useState<TaskPriority>('medium');
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingTaskPriority, setEditingTaskPriority] = useState<TaskPriority>('medium');
   const generation = useRef(0);
 
   const refreshAvatar = useCallback(async () => {
@@ -184,7 +197,7 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
     const current = ++generation.current;
     const [home, list, request] = await Promise.all([
       client.from('spaces').select('id,state').maybeSingle(),
-      client.from('tasks').select('id,space_id,title,completed,created_at').order('created_at', { ascending: false }),
+      client.from('tasks').select('id,space_id,title,completed,priority,due_on,requirements,created_at'),
       client.rpc('pending_partner'),
     ]);
     if (current !== generation.current) return;
@@ -259,13 +272,31 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
     const data = new FormData(form);
     const title = String(data.get('title')).trim();
     if (!title) { setMessage('Escribe un título para la tarea.'); return; }
+    const dueOn = String(data.get('due_on') ?? '');
+    const requirements = String(data.get('requirements') ?? '').trim();
     void act(async () => {
       const { error } = await client.from('tasks').insert({
         title, owner_id: userId, space_id: data.get('scope') === 'home' ? space?.id : null,
+        priority: data.get('priority'), due_on: dueOn || null, requirements: requirements || null,
       });
       if (error) throw error;
       form.reset();
       setTaskScope('personal');
+      setNewTaskPriority('medium');
+    });
+  }
+
+  function updateTaskDetails(event: FormEvent<HTMLFormElement>, taskId: string) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const requirements = String(data.get('requirements') ?? '').trim();
+    void act(async () => {
+      const { data: updated, error } = await client.from('tasks').update({
+        priority: data.get('priority'), due_on: String(data.get('due_on') ?? '') || null,
+        requirements: requirements || null,
+      }).eq('id', taskId).select('id').maybeSingle();
+      if (error || !updated) throw error ?? new Error('Task unavailable');
+      setEditingTaskId(null);
     });
   }
 
@@ -274,6 +305,11 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
   const canEditCoupleProfile = Boolean(space && space.state !== 'separated');
   const homeTasks = tasks.filter((task) => task.space_id === space?.id);
   const completed = homeTasks.filter((task) => task.completed).length;
+  const priorityOrder: Record<TaskPriority, number> = { high: 0, medium: 1, low: 2 };
+  const orderedTasks = [...tasks].sort((a, b) => Number(a.completed) - Number(b.completed)
+    || priorityOrder[a.priority] - priorityOrder[b.priority]
+    || (a.due_on ?? '9999-12-31').localeCompare(b.due_on ?? '9999-12-31')
+    || b.created_at.localeCompare(a.created_at));
 
   return (
     <>
@@ -415,16 +451,21 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
           <h1>Tareas</h1>
           <form className="task-form" onSubmit={addTask}>
             <label>Nueva tarea<input name="title" maxLength={160} required placeholder="¿Qué hay que hacer?" /></label>
+            <PixelSelect label="Prioridad" name="priority" value={newTaskPriority} options={taskPriorityOptions}
+              onValueChange={(value) => setNewTaskPriority(value as TaskPriority)} />
+            <label>Fecha límite<input type="date" name="due_on" /></label>
             <PixelSelect label="Visibilidad" name="scope" onValueChange={setTaskScope}
               options={canEditHome ? [taskVisibilityOptions[0], {
                 value: 'home', label: space.state === 'retained' ? 'Casa conservada' : 'Compartida',
               }] : [taskVisibilityOptions[0]]}
               value={canEditHome && taskScope === 'home' ? 'home' : 'personal'} />
+            <label className="task-requirements">Qué hace falta para terminarla<textarea name="requirements" maxLength={500}
+              placeholder="Materiales, pasos o ayuda que necesitas" rows={2} /></label>
             <button disabled={busy}>Añadir</button>
           </form>
           {tasks.length === 0 ? <p>Aún no hay tareas.</p> : (
             <ul className="tasks">
-              {tasks.map((task) => <li key={task.id}>
+              {orderedTasks.map((task) => <li key={task.id} className={task.completed ? 'task-completed' : undefined}>
                 <label><input type="checkbox" checked={task.completed} disabled={busy || (task.space_id !== null && !canEditHome)}
                   onChange={(event) => {
                     const done = event.currentTarget.checked;
@@ -433,7 +474,30 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
                       if (error || !data) throw error ?? new Error('Task unavailable');
                     });
                   }} /><span>{task.title}</span></label>
-                <small>{task.space_id ? 'Casa' : 'Personal'}</small>
+                <div className="task-meta">
+                  <span className={`task-priority priority-${task.priority}`}>Prioridad {task.priority === 'high' ? 'alta' : task.priority === 'low' ? 'baja' : 'normal'}</span>
+                  <small>{task.space_id ? 'Casa' : 'Personal'}</small>
+                  {task.due_on && <time dateTime={task.due_on}>Para {new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${task.due_on}T00:00:00Z`))}</time>}
+                  {task.requirements && <p>{task.requirements}</p>}
+                </div>
+                <button type="button" className="text-button" disabled={busy || (task.space_id !== null && !canEditHome)}
+                  aria-expanded={editingTaskId === task.id} onClick={() => {
+                    if (editingTaskId === task.id) setEditingTaskId(null);
+                    else {
+                      setEditingTaskId(task.id);
+                      setEditingTaskPriority(task.priority);
+                    }
+                  }}>
+                  {editingTaskId === task.id ? 'Cerrar edición' : 'Editar detalles'}
+                </button>
+                {editingTaskId === task.id && <form className="task-edit-form" onSubmit={(event) => updateTaskDetails(event, task.id)}>
+                  <PixelSelect label="Prioridad" name="priority" value={editingTaskPriority} options={taskPriorityOptions}
+                    onValueChange={(value) => setEditingTaskPriority(value as TaskPriority)} />
+                  <label>Fecha límite<input type="date" name="due_on" defaultValue={task.due_on ?? ''} /></label>
+                  <label className="task-requirements">Qué hace falta<textarea name="requirements" maxLength={500}
+                    defaultValue={task.requirements ?? ''} rows={2} /></label>
+                  <button disabled={busy}>Guardar detalles</button>
+                </form>}
                 <button type="button" className="text-button" disabled={busy || (task.space_id !== null && !canEditHome)}
                   aria-label={'Eliminar ' + task.title} onClick={() => {
                     if (!window.confirm('¿Eliminar esta tarea?')) return;
