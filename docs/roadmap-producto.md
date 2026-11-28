@@ -33,13 +33,13 @@ Esta lista recoge las funciones solicitadas para la app de pareja y el estado ac
 ## Fase 5: herramientas para la vida en pareja
 
 - [ ] Calendario interno para seguimiento del ciclo menstrual, privado por persona y opcional.
-- [ ] Registro de gastos personales y gastos compartidos, con quién pagó cada gasto.
+- [x] Registro de gastos personales y gastos compartidos, con quién pagó cada gasto.
 - [ ] Lista compartida de antojos de postres y comidas.
 - [ ] Wishlist con enlaces y fotos.
 
 ## Auditoría de Rinde
 
-- [ ] Revisar el repositorio Rinde y preparar una matriz de funciones presentes, faltantes y adaptables antes de afirmar que Our Space tiene paridad completa.
+- [x] Revisar el repositorio Rinde y preparar una matriz de funciones presentes, faltantes y adaptables antes de afirmar que Our Space tiene paridad completa. Ver `docs/rinde-paridad.md`.
 - [ ] Implementar las funciones reutilizables que sigan siendo relevantes, manteniendo la identidad y los flujos propios de Our Space.
 
 ## Dependencias de diseño

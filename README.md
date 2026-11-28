@@ -34,6 +34,10 @@ Cualquiera de las dos personas puede abandonar la casa. Conserva sus tareas priv
 
 La interfaz comprueba los cambios de la otra persona cada cinco segundos mientras la página está visible y también al recuperar el foco. Las operaciones de acceso se autorizan directamente en PostgreSQL.
 
+## Gastos
+
+En **Gastos** se pueden registrar y editar importes en PEN con fecha, categoría y descripción. Los gastos personales sólo los ve su titular; los compartidos se ven en la casa y permiten indicar cuál integrante pagó. La migración `20261127000400_expenses.sql` añade estas tablas y permisos. Los totales personales y compartidos se calculan por separado.
+
 ## Google Calendar
 
 La conexión de Calendar es individual. En Google Cloud, habilita **Google Calendar API**, configura la pantalla de consentimiento OAuth y crea un cliente OAuth de tipo **Aplicación web**. Añade `http://localhost:3000` y `https://ourspace-amber.vercel.app` como orígenes JavaScript autorizados. Si la app OAuth está en modo de prueba, añade las dos cuentas como usuarios de prueba. Copia el ID público del cliente a `NEXT_PUBLIC_GOOGLE_CLIENT_ID` en `.env.local` y en las variables de entorno de Vercel; reinicia el servidor local y redespliega producción.

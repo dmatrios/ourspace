@@ -124,6 +124,16 @@ p { color: var(--muted); line-height: 1.55; }
 .priority-medium { color: #526254; }
 .priority-low { color: #526579; }
 .task-overdue { color: #8a332e; }
+.expense-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
+.expense-totals p { display: flex; justify-content: space-between; flex-wrap: wrap; gap: .35rem; padding: .8rem; border: 2px solid var(--wood); background: #f0e7c7; }
+.expense-totals span { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+.expense-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: .65rem; }
+.expense-form button { grid-column: 3; }
+.expenses-list { margin: 0; padding: 0; list-style: none; }
+.expenses-list li { display: grid; gap: .4rem; padding: .8rem 0; border-top: 1px solid #d9c79a; }
+.expense-heading { display: flex; justify-content: space-between; gap: .65rem; overflow-wrap: anywhere; }
+.expense-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.expense-edit { padding: .75rem; background: #f0e7c7; }
 .task-edit-form { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(8rem, .7fr) minmax(10rem, 1fr) minmax(14rem, 2fr) auto; align-items: end; gap: .65rem; padding: .65rem; background: #f0e7c7; }
 .task-edit-form .task-requirements { grid-column: auto; }
 .separation { padding-top: .5rem; }
@@ -144,6 +154,8 @@ p { color: var(--muted); line-height: 1.55; }
   .task-form, .task-edit-form { grid-template-columns: 1fr; }
   .task-form label:first-child, .task-requirements, .task-edit-form .task-requirements { grid-column: 1; }
   .task-form button, .task-edit-form button { grid-column: 1; width: 100%; }
+  .expense-form, .expense-totals { grid-template-columns: 1fr; }
+  .expense-form button { grid-column: 1; }
 }
 
 .room-controls {

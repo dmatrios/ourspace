@@ -13,6 +13,7 @@ import { connect } from '../lib/supabase';
 import { defaultRoomStyle, roomPalettes, type RoomPalette, type RoomStyle } from '../lib/room-style';
 
 const Room = dynamic(() => import('./room'), { ssr: false, loading: () => <div className="room-fallback">Cargando habitación…</div> });
+const Expenses = dynamic(() => import('./expenses'), { ssr: false, loading: () => <p>Cargando gastos…</p> });
 
 type Client = NonNullable<ReturnType<typeof connect>>;
 type Space = { id: string; state: 'waiting' | 'paired' | 'separated' | 'retained' };
@@ -177,7 +178,7 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [pending, setPending] = useState<string | null>(null);
   const [invite, setInvite] = useState('');
-  const [tab, setTab] = useState<'home' | 'tasks'>('home');
+  const [tab, setTab] = useState<'home' | 'tasks' | 'expenses'>('home');
   const [message, setMessage] = useState('');
   const [loaded, setLoaded] = useState(false);
   const [readError, setReadError] = useState(false);
@@ -345,6 +346,7 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
       <nav aria-label="Vistas" className="tabs">
         <button aria-pressed={tab === 'home'} onClick={() => setTab('home')}>Casa</button>
         <button aria-pressed={tab === 'tasks'} onClick={() => setTab('tasks')}>Tareas</button>
+        <button aria-pressed={tab === 'expenses'} onClick={() => setTab('expenses')}>Gastos</button>
       </nav>
       <div className="calendar-panel" hidden={tab !== 'tasks' || !loaded || readError}>
         <GoogleCalendar userId={userId} tasks={tasks} />
@@ -478,7 +480,7 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
             </>
           )}
         </section>
-      ) : (
+      ) : tab === 'tasks' ? (
         <section className="panel">
           <h1>Tareas</h1>
           <nav className="task-views" aria-label="Vistas de tareas">
@@ -554,6 +556,8 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
             </ul>
           )}
         </section>
+      ) : (
+        <Expenses client={client} userId={userId} spaceId={space?.id ?? null} canEditHome={canEditHome} />
       )}
     </>
   );

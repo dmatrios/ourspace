@@ -18,7 +18,7 @@ before(async () => {
       $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     grant usage on schema auth to authenticated;
   `);
-  for (const migration of ['20261121000100_first_space.sql', '20261121000200_room_style.sql', '20261121000300_couple_onboarding.sql', '20261126000200_six_digit_invitation_codes.sql', '20261127000100_onboarding_while_waiting.sql', '20261127000200_avatar_customization.sql', '20261127000300_task_backlog_details.sql']) {
+  for (const migration of ['20261121000100_first_space.sql', '20261121000200_room_style.sql', '20261121000300_couple_onboarding.sql', '20261126000200_six_digit_invitation_codes.sql', '20261127000100_onboarding_while_waiting.sql', '20261127000200_avatar_customization.sql', '20261127000300_task_backlog_details.sql', '20261127000400_expenses.sql']) {
     await db.exec(await readFile('supabase/migrations/' + migration, 'utf8'));
   }
   await db.exec(`
@@ -107,6 +107,21 @@ test('la bienvenida guarda cada presentación y protege la fecha compartida', as
   assert.equal(await save(a, 'Ana', 'Cocinar', 'Salir este mes', 'Viajar juntos', '2024-01-12', '2024-01-12', 1), 'saved');
 });
 
+test('los gastos personales son privados y los compartidos validan al pagador', async () => {
+  const home = await value(a, 'select id from spaces');
+  const insert = 'insert into expenses(owner_id, space_id, paid_by, occurred_on, amount, category, description) values ($1,$2,$3,$4,$5,$6,$7) returning id';
+  const personal = await value(a, insert, [a, null, a, '2026-11-27', '12.50', 'food', 'Almuerzo']);
+  const shared = await value(b, insert, [b, home, a, '2026-11-27', '30.00', 'home', 'Casa']);
+  assert.deepEqual((await as(a, 'select description from expenses order by description')).map(row => row.description), ['Almuerzo', 'Casa']);
+  assert.deepEqual((await as(b, 'select description from expenses')).map(row => row.description), ['Casa']);
+  assert.deepEqual(await as(c, 'select * from expenses'), []);
+  assert.deepEqual(await as(b, 'update expenses set amount = 99 where id = $1 returning id', [personal]), []);
+  await assert.rejects(as(a, insert, [a, home, c, '2026-11-27', '3.00', 'other', 'Ajeno']), /Payer must be a current space member/);
+  await assert.rejects(as(c, insert, [c, home, a, '2026-11-27', '3.00', 'other', 'Ajeno']), /row-level security/);
+  assert.deepEqual((await value(a, 'select household_member_ids()')).sort(), [a, b].sort());
+  assert.equal(await value(a, 'update expenses set paid_by = $1 where id = $2 returning paid_by', [b, shared]), b);
+});
+
 test('una tarea privada queda aislada, la compartida persiste y el exmiembro pierde acceso', async () => {
   const home = await value(a, 'select id from spaces');
   await as(a, 'insert into tasks(owner_id, title) values ($1, $2)', [a, 'Privada']);
@@ -129,12 +144,14 @@ test('una tarea privada queda aislada, la compartida persiste y el exmiembro pie
   assert.equal(await value(b, "select save_room_style('forest', 2)"), false);
   const archive = await value(b, 'select export_separated_space()');
   assert.deepEqual(archive.tasks.map(task => task.title), ['Compartida']);
+  assert.deepEqual(archive.expenses.map(expense => expense.description), ['Casa']);
   assert.equal(archive.room.palette, 'night');
   assert.equal(archive.onboarding.relationship_since, '2024-01-12');
   assert.equal(archive.onboarding.introductions[0].long_goals, 'Viajar juntos');
   assert.equal(await value(b, 'select settle_space(false)'), true);
   assert.deepEqual((await db.query('select * from public.room_styles')).rows, []);
   assert.deepEqual((await db.query('select * from private.couple_introductions')).rows, []);
+  assert.deepEqual((await db.query('select * from public.expenses where space_id = $1', [home])).rows, []);
   assert.deepEqual(await as(b, 'select * from tasks'), []);
   assert.equal(await value(a, 'select title from tasks'), 'Privada');
 });
