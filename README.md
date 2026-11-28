@@ -40,6 +40,14 @@ La interfaz comprueba los cambios de la otra persona cada cinco segundos mientra
 
 En **Gastos** se pueden registrar y editar importes en PEN con fecha, categoría y descripción. Los gastos personales sólo los ve su titular; los compartidos se ven en la casa y permiten indicar cuál integrante pagó. La migración `20261127000400_expenses.sql` añade estas tablas y permisos. Los totales personales y compartidos se calculan por separado.
 
+## Trabajo de reparto
+
+En **Reparto**, cada integrante puede activar su propio rol de repartidor. Al activarlo se crean la plataforma PedidosYa y categorías iniciales, y se desbloquea la skin original **Repartidor Peya** en la casa. El rol, las jornadas y las finanzas de trabajo pertenecen a esa cuenta; la pareja sólo ve el avatar elegido en la casa compartida. Desactivar el rol conserva los registros y devuelve la ropa del avatar a la opción básica.
+
+El módulo permite registrar plataformas y límite de efectivo, vehículo y odómetro, jornadas con pausas y corrección de horarios, cobros por efectivo/Yape/Plin/tarjeta, ingresos diarios o por jornada con historial de ediciones, gastos, categorías, recurrencias confirmadas, combustible y arqueo. Los reportes por día, semana y mes separan cobros de ingresos, muestran meta semanal y productividad, y descargan un PDF. Los borradores de cobros y gastos se guardan sólo al pulsar **Guardar borrador** en ese navegador y caducan a los siete días.
+
+Aplica en orden `20261128000100_courier_role_avatar.sql`, `20261128000200_courier_work.sql` y `20261128000300_self_deletion.sql`. La cuenta se puede borrar desde **Mi cuenta** después de resolver las dependencias de una casa o gastos compartidos. El enlace de recuperación de contraseña usa el origen de la app como destino; comprueba que ese origen esté autorizado en Supabase Auth.
+
 ## Google Calendar
 
 La conexión de Calendar es individual. En Google Cloud, habilita **Google Calendar API**, configura la pantalla de consentimiento OAuth y crea un cliente OAuth de tipo **Aplicación web**. Añade `http://localhost:3000` y `https://ourspace-amber.vercel.app` como orígenes JavaScript autorizados. Si la app OAuth está en modo de prueba, añade las dos cuentas como usuarios de prueba. Copia el ID público del cliente a `NEXT_PUBLIC_GOOGLE_CLIENT_ID` en `.env.local` y en las variables de entorno de Vercel; reinicia el servidor local y redespliega producción.

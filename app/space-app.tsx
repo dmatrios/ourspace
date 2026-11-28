@@ -3,6 +3,7 @@
 import type { Session } from '@supabase/supabase-js';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import CoupleOnboarding, { type CoupleOnboardingData } from './couple-onboarding';
 import GoogleCalendar from './google-calendar';
@@ -14,6 +15,8 @@ import { defaultRoomStyle, roomPalettes, type RoomPalette, type RoomStyle } from
 
 const Room = dynamic(() => import('./room'), { ssr: false, loading: () => <div className="room-fallback">Cargando habitación…</div> });
 const Expenses = dynamic(() => import('./expenses'), { ssr: false, loading: () => <p>Cargando gastos…</p> });
+const CourierWork = dynamic(() => import('./courier-work'), { ssr: false, loading: () => <p>Cargando trabajo…</p> });
+const AccountSettings = dynamic(() => import('./account-settings'), { ssr: false, loading: () => <p>Cargando cuenta…</p> });
 
 type Client = NonNullable<ReturnType<typeof connect>>;
 type Space = { id: string; owner_id: string; state: 'waiting' | 'paired' | 'separated' | 'retained' };
@@ -53,6 +56,8 @@ export default function SpaceApp() {
   const [client] = useState(connect);
   const [session, setSession] = useState<Session | null>();
   const [register, setRegister] = useState(false);
+  const [forgotPassword, setForgotPassword] = useState(false);
+  const [recoveringPassword, setRecoveringPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordConfirmation, setShowPasswordConfirmation] = useState(false);
   const [message, setMessage] = useState('');
@@ -62,6 +67,8 @@ export default function SpaceApp() {
     if (!client) return;
     const { data } = client.auth.onAuthStateChange((event, current) => {
       setSession(current);
+      if (event === 'PASSWORD_RECOVERY') setRecoveringPassword(true);
+      if (event === 'SIGNED_OUT') setRecoveringPassword(false);
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') setMessage('');
     });
     return () => data.subscription.unsubscribe();
@@ -101,6 +108,32 @@ export default function SpaceApp() {
     }
   }
 
+  async function requestPasswordReset(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if (!client) return;
+    const email = String(new FormData(event.currentTarget).get('email') ?? '').trim();
+    setBusy(true); setMessage('');
+    const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+    setMessage(error ? 'No se pudo solicitar el enlace. Inténtalo de nuevo.' :
+      'Si existe una cuenta con ese correo, recibirás un enlace para cambiar la contraseña.');
+    setBusy(false);
+  }
+
+  async function updateRecoveredPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); if (!client) return;
+    const data = new FormData(event.currentTarget);
+    const password = String(data.get('password') ?? '');
+    if (password !== data.get('confirmation')) { setMessage('Las contraseñas no coinciden.'); return; }
+    setBusy(true); setMessage('');
+    const { error } = await client.auth.updateUser({ password });
+    if (error) setMessage('No se pudo cambiar la contraseña. Revisa los requisitos e inténtalo de nuevo.');
+    else {
+      await client.auth.signOut();
+      setRecoveringPassword(false);
+      setMessage('Contraseña actualizada. Inicia sesión con la nueva contraseña.');
+    }
+    setBusy(false);
+  }
+
   return (
     <div className="shell">
       <a href="#contenido" className="skip-link">Ir al contenido</a>
@@ -118,8 +151,28 @@ export default function SpaceApp() {
             <h1>Prepara tu espacio</h1>
             <p>Configura la conexión con Supabase para acceder a la casa y a tus tareas.</p>
           </section>
-        ) : session === undefined ? <p role="status">Comprobando sesión…</p> : session ? (
-          <Workspace key={session.user.id} client={client} userId={session.user.id} />
+        ) : session === undefined ? <p role="status">Comprobando sesión…</p> : recoveringPassword && session ? (
+          <section className="panel welcome">
+            <h1>Nueva contraseña</h1>
+            <p>El enlace de recuperación ya confirmó tu identidad. Elige una contraseña nueva.</p>
+            <form className="stack" onSubmit={updateRecoveredPassword}>
+              <label>Contraseña nueva<input type="password" name="password" minLength={8} autoComplete="new-password" required /></label>
+              <label>Confirmar contraseña<input type="password" name="confirmation" minLength={8} autoComplete="new-password" required /></label>
+              <button disabled={busy}>Guardar contraseña</button>
+            </form>
+          </section>
+        ) : session ? (
+          <Workspace key={session.user.id} client={client} userId={session.user.id} email={session.user.email ?? ''} />
+        ) : forgotPassword ? (
+          <section className="panel welcome">
+            <h1>Recupera tu cuenta</h1>
+            <p>Te enviaremos un enlace para elegir una nueva contraseña.</p>
+            <form className="stack" onSubmit={requestPasswordReset}>
+              <label>Correo electrónico<input type="email" name="email" autoComplete="email" required /></label>
+              <button disabled={busy}>Enviar enlace</button>
+            </form>
+            <button type="button" className="text-button" onClick={() => { setForgotPassword(false); setMessage(''); }}>Volver a iniciar sesión</button>
+          </section>
         ) : (
           <section className="entry">
             <div className="cabin">
@@ -161,6 +214,10 @@ export default function SpaceApp() {
               }}>
                 {register ? 'Ya tengo una cuenta' : 'Crear una cuenta'}
               </button>
+              {!register && <button type="button" className="text-button" onClick={() => { setForgotPassword(true); setMessage(''); }}>
+                Olvidé mi contraseña
+              </button>}
+              <Link className="text-link" href="/preview">Ver una vista previa</Link>
             </div>
           </section>
         )}
@@ -169,7 +226,7 @@ export default function SpaceApp() {
   );
 }
 
-function Workspace({ client, userId }: { client: Client; userId: string }) {
+function Workspace({ client, userId, email }: { client: Client; userId: string; email: string }) {
   const [memberAvatar, setMemberAvatar] = useState<MemberAvatar>(defaultAvatar);
   const [avatarReadError, setAvatarReadError] = useState(false);
   const [onboarding, setOnboarding] = useState<CoupleOnboardingData | null>(null);
@@ -178,7 +235,7 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [pending, setPending] = useState<string | null>(null);
   const [invite, setInvite] = useState('');
-  const [tab, setTab] = useState<'home' | 'tasks' | 'expenses'>('home');
+  const [tab, setTab] = useState<'home' | 'tasks' | 'expenses' | 'courier' | 'account'>('home');
   const [message, setMessage] = useState('');
   const [loaded, setLoaded] = useState(false);
   const [readError, setReadError] = useState(false);
@@ -347,6 +404,8 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
         <button aria-pressed={tab === 'home'} onClick={() => setTab('home')}>Casa</button>
         <button aria-pressed={tab === 'tasks'} onClick={() => setTab('tasks')}>Tareas</button>
         <button aria-pressed={tab === 'expenses'} onClick={() => setTab('expenses')}>Gastos</button>
+        <button aria-pressed={tab === 'courier'} onClick={() => setTab('courier')}>Reparto</button>
+        <button aria-pressed={tab === 'account'} onClick={() => setTab('account')}>Mi cuenta</button>
       </nav>
       <div className="calendar-panel" hidden={tab !== 'tasks' || !loaded || readError}>
         <GoogleCalendar userId={userId} tasks={tasks} />
@@ -354,7 +413,8 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
       {message && <p role="status" className="notice">{message}</p>}
       {readError && <p role="status" className="notice">No se pudieron actualizar los datos. Comprueba tu conexión.</p>}
       {avatarReadError && <p role="status" className="notice">No se pudo cargar la personalización del avatar. Comprueba si está aplicada la migración de avatares.</p>}
-      {!loaded || readError ? (!readError && <p role="status">Cargando tu espacio…</p>) : tab === 'home' ? (
+      {tab === 'account' ? <AccountSettings client={client} email={email} />
+        : !loaded || readError ? (!readError && <p role="status">Cargando tu espacio…</p>) : tab === 'home' ? (
         <section className="panel">
           <h1>{hasHome ? 'Nuestra casa' : 'Crea su espacio'}</h1>
           {hasHome ? (
@@ -557,8 +617,10 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
             </ul>
           )}
         </section>
-      ) : (
+      ) : tab === 'expenses' ? (
         <Expenses client={client} userId={userId} spaceId={space?.id ?? null} canEditHome={canEditHome} />
+      ) : (
+        <CourierWork client={client} userId={userId} onRoleChange={refreshAvatar} />
       )}
     </>
   );

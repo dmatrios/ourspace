@@ -35,12 +35,12 @@ function readAppearance(value: unknown): AvatarAppearance | null {
   if (!['neutral', 'masculine', 'feminine'].includes(String(appearance.silhouette))
     || !['short', 'long', 'curly'].includes(String(appearance.hair_style))
     || !['brown', 'black', 'blonde'].includes(String(appearance.hair_color))
-    || !['sage', 'plum', 'ocean', 'coral'].includes(String(appearance.outfit))) return null;
+    || !['sage', 'plum', 'ocean', 'coral', 'courier_red'].includes(String(appearance.outfit))) return null;
   return appearance as AvatarAppearance;
 }
 
 const outfitColors: Record<AvatarOutfit, string> = {
-  sage: '#668663', plum: '#946085', ocean: '#52758a', coral: '#c66f5e',
+  sage: '#668663', plum: '#946085', ocean: '#52758a', coral: '#c66f5e', courier_red: '#e43e64',
 };
 const hairColors: Record<AvatarHairColor, string> = { brown: '#5b4439', black: '#302d35', blonde: '#d2a85e' };
 const silhouetteOptions: PixelSelectOption[] = [
@@ -54,7 +54,7 @@ const hairColorOptions: PixelSelectOption[] = [
   { value: 'black', label: 'Negro' },
   { value: 'blonde', label: 'Rubio' },
 ];
-const outfitLabels: Record<AvatarOutfit, string> = { sage: 'Verde', plum: 'Ciruela', ocean: 'Azul', coral: 'Coral' };
+const outfitLabels: Record<AvatarOutfit, string> = { sage: 'Verde', plum: 'Ciruela', ocean: 'Azul', coral: 'Coral', courier_red: 'Repartidor Peya' };
 
 function Hair({ style, color }: { style: AvatarHairStyle; color: string }) {
   return (
@@ -119,6 +119,13 @@ function Avatar({ destination, appearance, reducedMotion }: {
         </group>)}
       </group>
       <Block position={[0, 0.33, 0]} size={appearance.silhouette === 'masculine' ? [0.4, 0.3, 0.25] : appearance.silhouette === 'feminine' ? [0.32, 0.3, 0.24] : [0.35, 0.29, 0.24]} color={outfitColors[appearance.outfit]} />
+      {appearance.outfit === 'courier_red' && <>
+        <Block position={[0, 0.34, -0.19]} size={[0.44, 0.43, 0.26]} color="#b6234d" />
+        <Block position={[0, 0.34, -0.33]} size={[0.29, 0.13, 0.025]} color="#fff0d0" />
+        <Block position={[0, 0.49, 0.136]} size={[0.28, 0.045, 0.03]} color="#fff0d0" />
+        <Block position={[0, 0.79, 0.035]} size={[0.38, 0.09, 0.35]} color="#e43e64" />
+        <Block position={[0, 0.74, 0.24]} size={[0.28, 0.035, 0.15]} color="#b6234d" />
+      </>}
       <Block position={[-0.211, 0.32, 0]} size={[0.082, 0.22, 0.18]} color={outfitColors[appearance.outfit]} />
       <Block position={[0.211, 0.32, 0]} size={[0.082, 0.22, 0.18]} color={outfitColors[appearance.outfit]} />
       <Block position={[0, 0.57, 0.02]} size={[0.28, 0.28, 0.24]} color="#d9a075" />
@@ -338,6 +345,7 @@ export default function Room({ completed, palette, avatar, client, spaceId, user
               options={outfitOptions} onValueChange={(value) => void changeAppearance('outfit', value)} />
           </fieldset>
           <p className="avatar-progress">{avatar.progress.completed_tasks} tareas completadas · {avatar.progress.active_days} días activos</p>
+          {avatar.progress.courier_enabled && <p className="avatar-progress">Skin de repartidor desbloqueada por tu rol de trabajo.</p>}
           <ul className="avatar-unlocks">
             <li aria-label={avatar.progress.completed_tasks >= 3 ? 'Desbloqueado' : 'Bloqueado'}>{avatar.progress.completed_tasks >= 3 ? '✓' : '🔒'} Cabello largo · 3 tareas completadas</li>
             <li aria-label={avatar.progress.active_days >= 7 ? 'Desbloqueado' : 'Bloqueado'}>{avatar.progress.active_days >= 7 ? '✓' : '🔒'} Cabello rizado · 7 días activos</li>

@@ -25,7 +25,7 @@ before(async () => {
     create function realtime.topic() returns text language sql stable as
       $$ select current_setting('realtime.topic', true) $$;
   `);
-  for (const migration of ['20261121000100_first_space.sql', '20261121000200_room_style.sql', '20261121000300_couple_onboarding.sql', '20261126000200_six_digit_invitation_codes.sql', '20261127000100_onboarding_while_waiting.sql', '20261127000200_avatar_customization.sql', '20261127000300_task_backlog_details.sql', '20261127000400_expenses.sql', '20261127000500_live_room_presence.sql']) {
+  for (const migration of ['20261121000100_first_space.sql', '20261121000200_room_style.sql', '20261121000300_couple_onboarding.sql', '20261126000200_six_digit_invitation_codes.sql', '20261127000100_onboarding_while_waiting.sql', '20261127000200_avatar_customization.sql', '20261127000300_task_backlog_details.sql', '20261127000400_expenses.sql', '20261127000500_live_room_presence.sql', '20261128000100_courier_role_avatar.sql', '20261128000200_courier_work.sql', '20261128000300_self_deletion.sql']) {
     await db.exec(await readFile('supabase/migrations/' + migration, 'utf8'));
   }
   await db.exec(`
@@ -149,6 +149,61 @@ test('la presencia y movimiento en vivo sólo permiten integrantes vinculados', 
   await assert.rejects(asRealtime(a, 'ourspace:room:otro', "insert into realtime.messages(extension) values ('presence')"), /row-level security/);
 });
 
+test('el rol de repartidor desbloquea su skin y mantiene privado el trabajo', async () => {
+  assert.equal(await value(a, "select save_member_avatar('neutral','short','brown','courier_red')"), 'locked');
+  await as(a, 'insert into courier_accounts(user_id, enabled) values ($1, true)', [a]);
+  assert.equal((await value(a, 'select get_member_avatar()')).progress.courier_enabled, true);
+  assert.equal(await value(a, "select save_member_avatar('neutral','short','brown','courier_red')"), 'saved');
+  assert.equal((await value(b, 'select get_member_avatar()')).progress.courier_enabled, false);
+  const platform = await value(a, "select id from courier_platforms where name = 'PedidosYa'");
+  assert.deepEqual(await as(b, 'select * from courier_platforms'), []);
+  await assert.rejects(as(b, 'insert into courier_shifts(user_id, platform_id) values ($1, $2)', [b, platform]), /permission denied/);
+  const shift = await value(a, 'select id from courier_start_shift($1, 100, 20)', [platform]);
+  await assert.rejects(as(a, "select courier_transition_shift($1, 'pause')", [shift]), /Odometer required/);
+  assert.equal(await value(a, "select status from courier_transition_shift($1, 'pause', 105)", [shift]), 'paused');
+  assert.equal(await value(a, "select status from courier_transition_shift($1, 'resume', 106)", [shift]), 'active');
+  assert.equal(await value(a, "select status from courier_transition_shift($1, 'finish', 112)", [shift]), 'completed');
+  await assert.rejects(as(b, "select courier_count_cash($1, 30)", [shift]), /unavailable/);
+  assert.deepEqual(await as(b, 'select * from courier_shifts'), []);
+  const earning = await value(a, `insert into courier_earnings(user_id,platform_id,shift_id,earned_on,mode,reported_amount)
+    values ($1,$2,$3,'2026-11-28','shift',40) returning id`, [a, platform, shift]);
+  assert.equal(await value(a, 'update courier_earnings set reported_amount = 45, revision = 1 where id = $1 returning revision', [earning]), 1);
+  assert.equal(await value(a, 'select count(*) from courier_earnings_history where earning_id = $1', [earning]), 1);
+  assert.deepEqual(await as(b, 'select * from courier_earnings_history'), []);
+  await assert.rejects(as(b, `insert into courier_earnings(user_id,platform_id,shift_id,earned_on,mode,reported_amount)
+    values ($1,$2,$3,'2026-11-28','shift',40)`, [b, platform, shift]), /violates foreign key|Shift and platform/);
+  await as(a, 'update courier_accounts set enabled = false where user_id = $1', [a]);
+  assert.equal((await value(a, 'select get_member_avatar()')).appearance.outfit, 'sage');
+});
+
+test('finanzas de reparto evitan duplicados y referencias cruzadas', async () => {
+  const platform = await value(a, 'select id from courier_platforms limit 1');
+  const shift = await value(a, 'select id from courier_shifts limit 1');
+  const shiftStart = await value(a, 'select started_at from courier_shifts where id = $1', [shift]);
+  const otherPlatform = await value(a, "insert into courier_platforms(user_id,name) values ($1,'Otra') returning id", [a]);
+  const earnedOn = await value(a, 'select earned_on from courier_earnings where shift_id = $1', [shift]);
+  await assert.rejects(as(a, `insert into courier_earnings(user_id,platform_id,earned_on,mode,reported_amount)
+    values ($1,$2,$3,'daily',10)`, [a, platform, earnedOn]), /cannot overlap/);
+  await assert.rejects(as(a, `insert into courier_receipts(user_id,platform_id,shift_id,amount,payment_method)
+    values ($1,$2,$3,12,'cash')`, [a, otherPlatform, shift]), /do not match/);
+  await as(a, `insert into courier_receipts(user_id,platform_id,shift_id,occurred_at,amount,payment_method,cash_received)
+    values ($1,$2,$3,$4,12,'cash',20)`, [a, platform, shift, shiftStart]);
+  const category = await value(a, `insert into courier_categories(user_id,name,kind)
+    values ($1,'Comida de turno','operational') returning id`, [a]);
+  await as(a, `insert into courier_expenses(user_id,category_id,shift_id,amount,description,payment_method,cash_paid)
+    values ($1,$2,$3,5,'Almuerzo','cash',10)`, [a, category, shift]);
+  await as(a, `insert into courier_fuel(user_id,shift_id,amount,liters,payment_method)
+    values ($1,$2,8,2,'yape')`, [a, shift]);
+  assert.equal(await value(a, 'select courier_remove_category($1)', [category]), 'in_use');
+  const replacement = await value(a, "select id from courier_categories where name = 'Comida de trabajo'");
+  assert.equal(await value(a, 'select courier_remove_category($1,$2)', [category, replacement]), 'deleted');
+  assert.equal(await value(a, "select count(*) from courier_expenses where category_id = $1", [replacement]), 1);
+  assert.deepEqual(await as(b, 'select * from courier_receipts'), []);
+  assert.deepEqual(await as(b, 'select * from courier_expenses'), []);
+  assert.deepEqual(await as(b, 'select * from courier_fuel'), []);
+  assert.equal(await value(a, 'select cash_counted from courier_count_cash($1, 27)', [shift]), '27.00');
+});
+
 test('una tarea privada queda aislada, la compartida persiste y el exmiembro pierde acceso', async () => {
   const home = await value(a, 'select id from spaces');
   await as(a, 'insert into tasks(owner_id, title) values ($1, $2)', [a, 'Privada']);
@@ -204,4 +259,20 @@ test('se limita la cantidad de intentos de vinculación', async () => {
   }
   const { rows } = await db.query('select attempts from private.join_attempts where user_id = $1', [c]);
   assert.equal(rows[0].attempts, 9);
+});
+
+test('borrar la cuenta respeta las dependencias de la casa y elimina la cuenta libre', async () => {
+  assert.equal(await value(a, 'select delete_own_account()'), 'resolve_home_first');
+  assert.equal(await value(c, 'select delete_own_account()'), 'deleted');
+  assert.equal((await db.query('select id from auth.users where id = $1', [c])).rows.length, 0);
+  const courier = '00000000-0000-4000-8000-000000000004';
+  await db.exec("insert into private.allowed_emails values ('courier@example.test')");
+  await db.query('insert into auth.users(id,email) values ($1,$2)', [courier, 'courier@example.test']);
+  await as(courier, 'insert into courier_accounts(user_id,enabled) values ($1,true)', [courier]);
+  const platform = await value(courier, "insert into courier_platforms(user_id,name) values ($1,'Peya') returning id", [courier]);
+  const shift = await value(courier, 'select id from courier_start_shift($1)', [platform]);
+  await as(courier, `insert into courier_earnings(user_id,platform_id,shift_id,earned_on,mode,reported_amount)
+    values ($1,$2,$3,'2026-11-28','shift',10)`, [courier, platform, shift]);
+  assert.equal(await value(courier, 'select delete_own_account()'), 'deleted');
+  assert.equal((await db.query('select id from auth.users where id = $1', [courier])).rows.length, 0);
 });
