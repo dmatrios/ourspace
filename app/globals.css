@@ -268,3 +268,47 @@ p { color: var(--muted); line-height: 1.55; }
 .introductions dt { font-weight: 700; }
 .introductions dd { margin: 0 0 .65rem; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
 .introductions dd:last-child { margin-bottom: 0; }
+.miss-you-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .8rem 1.2rem;
+  align-items: center;
+  margin: .85rem 0 1rem;
+  padding: 1rem;
+  border: 2px solid #7d4151;
+  background: #f7dfd9;
+  box-shadow: 4px 4px 0 #d5a9a1;
+}
+.miss-you-copy { display: flex; align-items: center; gap: .9rem; min-width: 0; }
+.miss-you-copy strong { display: block; font-family: Silkscreen, ui-monospace, monospace; font-size: 1.05rem; }
+.miss-you-copy p { margin-top: .2rem; }
+.miss-you-heart { color: #a63f58; font-family: Silkscreen, ui-monospace, monospace; font-size: 2.7rem; line-height: 1; text-shadow: 3px 3px 0 #e9a8ad; }
+.miss-you-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem; }
+.miss-you-actions > button:first-child { background: #9d4355; }
+.miss-you-actions > button:first-child:hover:not(:disabled) { background: #813749; }
+.miss-you-inbox { min-width: 11rem; }
+.miss-you-inbox summary { min-height: 44px; display: flex; align-items: center; gap: .4rem; cursor: pointer; font-weight: 700; text-decoration: underline; text-underline-offset: .2em; }
+.miss-you-inbox ul { margin: .5rem 0 0; padding-left: 1.2rem; }
+.miss-you-inbox li { margin: .55rem 0; }
+.miss-you-inbox li button { margin-left: .4rem; }
+.miss-you-count { display: inline-block; padding: .15rem .4rem; border: 1px solid #7d4151; background: #fff7dd; font-size: .8rem; text-decoration: none; }
+.miss-you-status { grid-column: 1 / -1; font-weight: 700; }
+.furniture-editor { display: grid; gap: .9rem; padding: 1rem; border: 2px solid var(--wood); background: #f6edcf; }
+.furniture-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; }
+.furniture-heading p { margin-top: .25rem; }
+.furniture-catalog { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: .55rem; }
+.furniture-catalog button { display: grid; gap: .15rem; align-content: center; text-align: left; }
+.furniture-catalog small { font-size: .75rem; font-weight: 500; }
+.furniture-items { display: grid; gap: .45rem; }
+.furniture-items h3 { margin: 0; }
+.furniture-items > div { display: flex; flex-wrap: wrap; gap: .45rem; }
+.furniture-items button[aria-pressed=true] { background: var(--green); color: white; }
+.furniture-move { display: grid; gap: .65rem; padding: .75rem; border: 2px dashed #9b825b; background: var(--paper); }
+.furniture-move > div { display: flex; flex-wrap: wrap; gap: .45rem; }
+.furniture-move > div button:not(.text-button) { min-width: 3rem; }
+@media (max-width: 42rem) {
+  .miss-you-card { grid-template-columns: 1fr; }
+  .miss-you-actions { align-items: stretch; }
+  .miss-you-actions > button { flex: 1 1 9rem; }
+  .miss-you-inbox { flex: 1 1 100%; }
+}

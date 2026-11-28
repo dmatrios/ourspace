@@ -24,6 +24,8 @@ Puedes tocar el suelo o usar las flechas para mover al avatar. Los botones de di
 
 La decoración compartida (Bosque, Atardecer o Noche) se guarda en Supabase con una revisión para evitar sobrescribir cambios de la otra persona. Para habilitarla en una instalación con la primera migración aplicada, aplica `20261121000200_room_style.sql`. Mientras tanto, la casa funciona con la decoración Bosque.
 
+En **Decora su casa**, ambos integrantes pueden colocar, mover o quitar muebles. Se puede seleccionar un objeto y tocar el suelo para situarlo, o usar las flechas de la pantalla. La disposición se guarda con revisión para avisar si la otra persona editó a la vez. Sofá, escritorio y plantas están disponibles desde el inicio; la silla, lámpara, estantería y flores se desbloquean por tareas compartidas completadas y días activos. Los desbloqueos obtenidos se conservan aunque una tarea se vuelva a abrir. Aplica `20261128000700_room_furniture.sql` para habilitar el catálogo compartido.
+
 Cuando ambos integrantes abren la casa, ven los dos avatares y sus movimientos en vivo. La migración `20261127000500_live_room_presence.sql` autoriza un canal privado de Supabase Realtime únicamente para integrantes de una casa vinculada. Cada persona debe iniciar sesión y abrir la casa en su navegador para aparecer en ella; el movimiento no queda guardado como historial.
 
 ## Bienvenida de pareja
@@ -42,13 +44,19 @@ En **Gastos** se pueden registrar y editar importes en PEN con fecha, categoría
 
 ## Trabajo de reparto
 
-En **Reparto**, cada integrante puede activar su propio rol de repartidor. Al activarlo se crean la plataforma PedidosYa y categorías iniciales, y se desbloquea la skin original **Repartidor Peya** en la casa. El rol, las jornadas y las finanzas de trabajo pertenecen a esa cuenta; la pareja sólo ve el avatar elegido en la casa compartida. Desactivar el rol conserva los registros y devuelve la ropa del avatar a la opción básica.
+En **Reparto**, cada integrante puede activar su propio rol de repartidor. Al activarlo se crean la plataforma PedidosYa y categorías iniciales, y se desbloquea la skin original **Repartidor Peya** en la casa. El rol, las jornadas y las finanzas de trabajo pertenecen a esa cuenta; la pareja ve el avatar elegido en la casa compartida y sólo puede anotar movimientos si se le concede permiso. Desactivar el rol conserva los registros y devuelve la ropa del avatar a la opción básica.
 
 El módulo permite registrar plataformas y límite de efectivo, vehículo y odómetro, jornadas con pausas y corrección de horarios, cobros por efectivo/Yape/Plin/tarjeta, ingresos diarios o por jornada con historial de ediciones, gastos, categorías, recurrencias confirmadas, combustible y arqueo. Los reportes por día, semana y mes separan cobros de ingresos, muestran meta semanal y productividad, y descargan un PDF. Los borradores de cobros y gastos se guardan sólo al pulsar **Guardar borrador** en ese navegador y caducan a los siete días.
 
 Con la pareja vinculada, quien reparte puede activar **Registro asistido por mi pareja** en Reparto → Ajustes. La otra persona podrá anotar cobros y gastos de trabajo durante una jornada activa desde **Registrar para mi pareja**. El permiso se puede retirar en cualquier momento; la otra persona no obtiene acceso a los reportes, la configuración ni el cierre de jornada. Cada movimiento conserva quién lo registró.
 
 Aplica en orden `20261128000100_courier_role_avatar.sql`, `20261128000200_courier_work.sql`, `20261128000300_self_deletion.sql`, `20261128000400_vehicle_odometer.sql` y `20261128000500_partner_courier_logging.sql`. La cuenta se puede borrar desde **Mi cuenta** después de resolver las dependencias de una casa o gastos compartidos. El enlace de recuperación de contraseña usa el origen de la app como destino; comprueba que ese origen esté autorizado en Supabase Auth.
+
+## Te extraño
+
+Con la pareja vinculada, el botón **Te extraño** deja un aviso privado en la bandeja de la otra persona. Se pueden marcar los avisos como leídos. El servidor admite un envío por persona cada quince minutos para evitar repeticiones accidentales. La migración `20261128000600_miss_you_signals.sql` guarda los avisos y cierra el acceso al desvincularse.
+
+Si la otra persona activa **Avisos del navegador**, la app muestra una notificación del sistema al recibir un mensaje nuevo mientras la página sigue abierta. Si cierra completamente la app, el aviso permanece en la bandeja para su próxima visita; esta versión aún no envía push en segundo plano.
 
 ## Google Calendar
 

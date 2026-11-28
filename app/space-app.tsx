@@ -9,6 +9,7 @@ import CoupleOnboarding, { type CoupleOnboardingData } from './couple-onboarding
 import GoogleCalendar from './google-calendar';
 import { defaultAvatar, type AvatarAppearance, type MemberAvatar } from './avatar';
 import InvitationActions from './invitation-actions';
+import MissYou from './miss-you';
 import PixelSelect, { type PixelSelectOption } from './pixel-select';
 import { connect } from '../lib/supabase';
 import { defaultRoomStyle, roomPalettes, type RoomPalette, type RoomStyle } from '../lib/room-style';
@@ -407,6 +408,7 @@ function Workspace({ client, userId, email }: { client: Client; userId: string; 
         <button aria-pressed={tab === 'courier'} onClick={() => setTab('courier')}>Reparto</button>
         <button aria-pressed={tab === 'account'} onClick={() => setTab('account')}>Mi cuenta</button>
       </nav>
+      {space?.state === 'paired' && <MissYou client={client} spaceId={space.id} />}
       <div className="calendar-panel" hidden={tab !== 'tasks' || !loaded || readError}>
         <GoogleCalendar userId={userId} tasks={tasks} />
       </div>
@@ -432,7 +434,7 @@ function Workspace({ client, userId, email }: { client: Client; userId: string; 
               </div>
               <Room key={space.id} completed={completed} palette={roomStyle?.palette ?? 'forest'} avatar={memberAvatar}
                 client={client} spaceId={space.id} userId={userId} ownerId={space.owner_id} paired={space.state === 'paired'}
-                onAvatarChange={saveAvatar} openTasks={() => setTab('tasks')} />
+                canEdit={canEditHome} onAvatarChange={saveAvatar} openTasks={() => setTab('tasks')} />
               {canEditHome && roomStyle && (
                 <fieldset className="room-palettes" disabled={busy}>
                   <legend>Decoración de la casa</legend>

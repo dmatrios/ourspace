@@ -7,6 +7,7 @@ import PixelSelect, { type PixelSelectOption } from './pixel-select';
 import type { AvatarAppearance, AvatarHairColor, AvatarHairStyle, AvatarOutfit, MemberAvatar } from './avatar';
 import { connect } from '../lib/supabase';
 import { roomPalettes, type RoomPalette } from '../lib/room-style';
+import { FurnitureControls, FurnitureScene, gridPoint, useRoomFurniture } from './room-furniture';
 
 type Position = [number, number, number];
 type Client = NonNullable<ReturnType<typeof connect>>;
@@ -147,12 +148,13 @@ function insideRoom(x: number, z: number): Destination {
   return { x: Math.max(-1.12, Math.min(2.42, x)), z: Math.max(-0.88, Math.min(2.07, z)) };
 }
 
-export default function Room({ completed, palette, avatar, client, spaceId, userId, ownerId, paired, onAvatarChange, openTasks }: {
+export default function Room({ completed, palette, avatar, client, spaceId, userId, ownerId, paired, canEdit, onAvatarChange, openTasks }: {
   completed: number; palette: RoomPalette; avatar: MemberAvatar;
-  client: Client; spaceId: string; userId: string; ownerId: string; paired: boolean;
+  client: Client; spaceId: string; userId: string; ownerId: string; paired: boolean; canEdit: boolean;
   onAvatarChange: (appearance: AvatarAppearance) => Promise<void>; openTasks: () => void;
 }) {
   const colors = roomPalettes[palette];
+  const furniture = useRoomFurniture(client, spaceId);
   const [destination, setDestination] = useState<Destination>(() => userId === ownerId ? initialDestination : partnerStart);
   const [partner, setPartner] = useState<Partner | null>(null);
   const [liveStatus, setLiveStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
@@ -278,6 +280,7 @@ export default function Room({ completed, palette, avatar, client, spaceId, user
           <mesh position={[0, 0.003, 0]} rotation={[-Math.PI / 2, 0, 0]}
             onClick={({ point, stopPropagation }) => {
               stopPropagation();
+              if (canEdit && furniture.place(gridPoint(point.x, point.z).x, gridPoint(point.x, point.z).z)) return;
               goTo(insideRoom(point.x, point.z));
             }}>
             <planeGeometry args={[6, 5]} /><meshBasicMaterial visible={false} />
@@ -289,9 +292,6 @@ export default function Room({ completed, palette, avatar, client, spaceId, user
           <Block position={[0, 1, -2.42]} size={[6, 2, 0.16]} color={colors.wall} />
           <Block position={[-2.92, 1, 0]} size={[0.16, 2, 4.7]} color={colors.side} />
           <Block position={[0.8, 0.02, 0.8]} size={[2.8, 0.04, 2.04]} color={colors.rug} />
-          <Block position={[-1.8, 0.38, 0.55]} size={[0.95, 0.74, 2.08]} color="#63806e" />
-          <Block position={[-2.2, 0.77, 0.55]} size={[0.25, 0.65, 2.08]} color="#789681" />
-          <Block position={[-1.74, 0.72, 0.16]} size={[0.5, 0.23, 0.48]} color="#edd2a5" />
           {[0.1, 0.8, 1.5, 2.2].map((z) => (
             <Block key={z} position={[0, 0, z]} size={[5.94, 0.012, 0.025]} color="#9f674a" />
           ))}
@@ -300,25 +300,16 @@ export default function Room({ completed, palette, avatar, client, spaceId, user
           <Block position={[-0.75, 1.44, -2.2]} size={[0.058, 0.68, 0.035]} color="#a46c53" />
           <Block position={[-0.75, 1.44, -2.2]} size={[1.22, 0.058, 0.035]} color="#a46c53" />
           <Block position={[0.61, 0.02, 0.8]} size={[2.1, 0.05, 0.1]} color={colors.trim} />
-          <Block position={[0.61, 0.02, 1.1]} size={[1.4, 0.05, 0.07]} color={colors.trim} />
-          <group onClick={(event) => { event.stopPropagation(); openTasks(); }}
-            onPointerOver={(event) => { (event.nativeEvent.target as HTMLElement).style.cursor = 'pointer'; }}
-            onPointerOut={(event) => { (event.nativeEvent.target as HTMLElement).style.cursor = ''; }}>
-            <Block position={[1.35, 0.97, -1.53]} size={[2.12, 0.16, 0.95]} color="#80513a" />
-            <Block position={[0.5, 0.45, -1.53]} size={[0.16, 0.9, 0.72]} color="#684634" />
-            <Block position={[2.2, 0.45, -1.53]} size={[0.16, 0.9, 0.72]} color="#684634" />
-            <Block position={[1.35, 1.14, -1.45]} size={[0.61, 0.14, 0.42]} color={completed ? '#9bbd7a' : '#f4ddaf'} />
-            <Block position={[1.96, 1.2, -1.78]} size={[0.16, 0.3, 0.16]} color="#bd7653" />
-          </group>
-          <Block position={[-2, 0.22, -1.66]} size={[0.5, 0.44, 0.5]} color="#b46b55" />
-          <Block position={[-2, 0.63, -1.66]} size={[0.24, 0.48, 0.24]} color="#587e51" />
-          <Block position={[-2.14, 0.85, -1.58]} size={[0.45, 0.16, 0.21]} color="#729761" />
+          <Block position={[0.61, 0.02, 1.1]} size={[1.4, 0.05, 0.07]} color={completed > 0 ? '#9bbd7a' : colors.trim} />
+          <FurnitureScene items={furniture.layout.items} editing={canEdit && furniture.editing}
+            selectedId={furniture.selectedId} onSelect={furniture.setSelectedId} openTasks={openTasks} />
         </Canvas>
       </div>
       {paired && <p role="status" className="room-presence-status">{partner ? 'Tu pareja está en la casa contigo.'
         : liveStatus === 'error' ? 'No se pudo conectar la casa en vivo. Recarga la página para reintentar.'
           : liveStatus === 'connecting' ? 'Conectando la casa en vivo…' : 'Tu pareja no está en la casa ahora.'}</p>}
       <div className="room-controls">
+        {canEdit && <FurnitureControls state={furniture} />}
         <div className="room-control-row">
           <div className="d-pad" role="group" aria-label="Mover avatar" onKeyDown={(event) => {
           const direction = movement.find(({ key }) => key === event.key);

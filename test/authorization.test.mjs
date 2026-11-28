@@ -25,7 +25,7 @@ before(async () => {
     create function realtime.topic() returns text language sql stable as
       $$ select current_setting('realtime.topic', true) $$;
   `);
-  for (const migration of ['20261121000100_first_space.sql', '20261121000200_room_style.sql', '20261121000300_couple_onboarding.sql', '20261126000200_six_digit_invitation_codes.sql', '20261127000100_onboarding_while_waiting.sql', '20261127000200_avatar_customization.sql', '20261127000300_task_backlog_details.sql', '20261127000400_expenses.sql', '20261127000500_live_room_presence.sql', '20261128000100_courier_role_avatar.sql', '20261128000200_courier_work.sql', '20261128000300_self_deletion.sql', '20261128000400_vehicle_odometer.sql', '20261128000500_partner_courier_logging.sql']) {
+  for (const migration of ['20261121000100_first_space.sql', '20261121000200_room_style.sql', '20261121000300_couple_onboarding.sql', '20261126000200_six_digit_invitation_codes.sql', '20261127000100_onboarding_while_waiting.sql', '20261127000200_avatar_customization.sql', '20261127000300_task_backlog_details.sql', '20261127000400_expenses.sql', '20261127000500_live_room_presence.sql', '20261128000100_courier_role_avatar.sql', '20261128000200_courier_work.sql', '20261128000300_self_deletion.sql', '20261128000400_vehicle_odometer.sql', '20261128000500_partner_courier_logging.sql', '20261128000600_miss_you_signals.sql', '20261128000700_room_furniture.sql']) {
     await db.exec(await readFile('supabase/migrations/' + migration, 'utf8'));
   }
   await db.exec(`
@@ -240,6 +240,56 @@ test('la pareja registra cobros y gastos sólo con permiso y en jornada activa',
   await assert.rejects(as(b, "select courier_partner_add_receipt($1, 10, 'cash')", [shift]), /Active shift unavailable/);
 });
 
+test('Te extraño llega sólo a la pareja, persiste y limita envíos repetidos', async () => {
+  const home = await value(a, 'select id from spaces');
+  assert.equal(await value(c, 'select send_miss_you($1)', [home]), 'unavailable');
+  assert.equal(await value(a, 'select send_miss_you($1)', [home]), 'sent');
+  assert.equal(await value(a, 'select send_miss_you($1)', [home]), 'cooldown');
+  assert.deepEqual(await value(a, 'select get_miss_you_inbox($1)', [home]), []);
+  assert.deepEqual(await value(c, 'select get_miss_you_inbox($1)', [home]), []);
+  const inbox = await value(b, 'select get_miss_you_inbox($1)', [home]);
+  assert.equal(inbox.length, 1);
+  assert.equal(inbox[0].read_at, null);
+  await assert.rejects(as(b, 'select * from private.miss_you_signals'), /permission denied/);
+  assert.equal(await value(a, 'select read_miss_you($1)', [inbox[0].id]), false);
+  assert.equal(await value(b, 'select read_miss_you($1)', [inbox[0].id]), true);
+  assert.equal(await value(b, 'select read_miss_you($1)', [inbox[0].id]), false);
+  assert.ok((await value(b, 'select get_miss_you_inbox($1)', [home]))[0].read_at);
+  await db.exec("update private.miss_you_signals set created_at = now() - interval '16 minutes'");
+  assert.equal(await value(a, 'select send_miss_you($1)', [home]), 'sent');
+  assert.equal((await value(b, 'select get_miss_you_inbox($1)', [home])).length, 2);
+});
+
+test('los muebles se comparten, se mueven con revisión y se desbloquean por logros', async () => {
+  const home = await value(a, 'select id from spaces');
+  assert.equal(await value(c, 'select get_room_layout($1)', [home]), null);
+  const initial = await value(a, 'select get_room_layout($1)', [home]);
+  assert.equal(initial.revision, 0);
+  assert.deepEqual(initial.items.map((item) => item.kind), ['sofa', 'desk', 'plant']);
+  assert.equal(await value(c, 'select save_room_layout($1,0,$2::jsonb)', [home, JSON.stringify(initial.items)]), 'unavailable');
+  await assert.rejects(as(a, 'select * from private.room_layouts'), /permission denied/);
+  const lockedItems = [...initial.items, { id: 'flores-1', kind: 'flowers', x: 4, z: 4 }];
+  assert.equal(await value(a, 'select save_room_layout($1,0,$2::jsonb)', [home, JSON.stringify(lockedItems)]), 'locked');
+  const first = await value(a, 'insert into tasks(owner_id,space_id,title) values ($1,$2,$3) returning id', [a, home, 'Logro casa 1']);
+  const second = await value(a, 'insert into tasks(owner_id,space_id,title) values ($1,$2,$3) returning id', [a, home, 'Logro casa 2']);
+  await as(a, 'update tasks set completed = true where id in ($1,$2)', [first, second]);
+  const unlocked = await value(b, 'select get_room_layout($1)', [home]);
+  assert.ok(unlocked.unlocked_kinds.includes('chair'));
+  const moved = [...unlocked.items.map((item) => item.kind === 'sofa' ? { ...item, x: 2 } : item),
+    { id: 'silla-1', kind: 'chair', x: 4, z: 3 }];
+  assert.equal(await value(b, 'select save_room_layout($1,0,$2::jsonb)', [home, JSON.stringify(moved)]), 'saved');
+  assert.equal(await value(a, 'select save_room_layout($1,0,$2::jsonb)', [home, JSON.stringify(initial.items)]), 'conflict');
+  assert.equal((await value(a, 'select get_room_layout($1)', [home])).items[0].x, 2);
+  assert.equal(await value(b, 'select save_room_layout($1,1,$2::jsonb)', [home,
+    JSON.stringify([{ id: 'silla-1', kind: 'chair', x: 99, z: 3 }])]), 'invalid');
+  await db.query('update private.member_avatar_activity set active_days = 7 where user_id = $1', [a]);
+  assert.ok((await value(b, 'select get_room_layout($1)', [home])).unlocked_kinds.includes('bookshelf'));
+  await db.query('update private.member_avatar_activity set active_days = 1 where user_id = $1', [a]);
+  assert.ok((await value(a, 'select get_room_layout($1)', [home])).unlocked_kinds.includes('bookshelf'));
+  await as(a, 'delete from tasks where id in ($1,$2)', [first, second]);
+  assert.ok((await value(b, 'select get_room_layout($1)', [home])).unlocked_kinds.includes('chair'));
+});
+
 test('una tarea privada queda aislada, la compartida persiste y el exmiembro pierde acceso', async () => {
   const home = await value(a, 'select id from spaces');
   await as(a, 'insert into tasks(owner_id, title) values ($1, $2)', [a, 'Privada']);
@@ -252,6 +302,9 @@ test('una tarea privada queda aislada, la compartida persiste y el exmiembro pie
   assert.equal(await value(b, 'select completed from tasks where id = $1', [shared]), true);
   assert.equal(await value(a, 'select leave_space()'), true);
   assert.equal(await value(b, 'select courier_partner_context()'), null);
+  assert.deepEqual(await value(b, 'select get_miss_you_inbox($1)', [home]), []);
+  assert.equal(await value(b, 'select send_miss_you($1)', [home]), 'unavailable');
+  assert.equal(await value(b, 'select get_room_layout($1)', [home]), null);
   assert.deepEqual(await asRealtime(a, `ourspace:room:${home}`, 'select extension from realtime.messages'), []);
   assert.deepEqual(await asRealtime(b, `ourspace:room:${home}`, 'select extension from realtime.messages'), []);
   assert.equal(await value(a, 'select title from tasks'), 'Privada');
