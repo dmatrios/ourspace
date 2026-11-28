@@ -16,6 +16,7 @@ const Room = dynamic(() => import('./room'), { ssr: false, loading: () => <div c
 type Client = NonNullable<ReturnType<typeof connect>>;
 type Space = { id: string; state: 'waiting' | 'paired' | 'separated' | 'retained' };
 type TaskPriority = 'high' | 'medium' | 'low';
+type TaskView = 'backlog' | 'today' | 'tomorrow' | 'date';
 type Task = {
   id: string; space_id: string | null; title: string; completed: boolean;
   priority: TaskPriority; due_on: string | null; requirements: string | null; created_at: string;
@@ -31,6 +32,20 @@ const taskVisibilityOptions: PixelSelectOption[] = [
   { value: 'personal', label: 'Solo yo' },
   { value: 'home', label: 'Compartida' },
 ];
+
+function limaDate(date: Date): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(date);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+function followingDate(day: string): string {
+  const next = new Date(`${day}T00:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return next.toISOString().slice(0, 10);
+}
 
 export default function SpaceApp() {
   const [client] = useState(connect);
@@ -169,6 +184,8 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
   const [busy, setBusy] = useState(false);
   const [exported, setExported] = useState(false);
   const [taskScope, setTaskScope] = useState('personal');
+  const [taskView, setTaskView] = useState<TaskView>('backlog');
+  const [selectedDate, setSelectedDate] = useState(() => limaDate(new Date()));
   const [newTaskPriority, setNewTaskPriority] = useState<TaskPriority>('medium');
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTaskPriority, setEditingTaskPriority] = useState<TaskPriority>('medium');
@@ -310,6 +327,16 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
     || priorityOrder[a.priority] - priorityOrder[b.priority]
     || (a.due_on ?? '9999-12-31').localeCompare(b.due_on ?? '9999-12-31')
     || b.created_at.localeCompare(a.created_at));
+  const today = limaDate(new Date());
+  const tomorrow = followingDate(today);
+  const visibleTasks = orderedTasks.filter((task) => {
+    if (taskView === 'backlog') return true;
+    if (task.completed || !task.due_on) return false;
+    if (taskView === 'today') return task.due_on <= today;
+    return task.due_on === (taskView === 'tomorrow' ? tomorrow : selectedDate);
+  });
+  const todayCount = tasks.filter((task) => !task.completed && task.due_on && task.due_on <= today).length;
+  const tomorrowCount = tasks.filter((task) => !task.completed && task.due_on === tomorrow).length;
 
   return (
     <>
@@ -449,11 +476,22 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
       ) : (
         <section className="panel">
           <h1>Tareas</h1>
+          <nav className="task-views" aria-label="Vistas de tareas">
+            <button type="button" className="secondary" aria-pressed={taskView === 'backlog'} onClick={() => setTaskView('backlog')}>Backlog</button>
+            <button type="button" className="secondary" aria-pressed={taskView === 'today'} onClick={() => setTaskView('today')}>Hoy <span aria-hidden="true">{todayCount}</span></button>
+            <button type="button" className="secondary" aria-pressed={taskView === 'tomorrow'} onClick={() => setTaskView('tomorrow')}>Mañana <span aria-hidden="true">{tomorrowCount}</span></button>
+            <button type="button" className="secondary" aria-pressed={taskView === 'date'} onClick={() => setTaskView('date')}>Otra fecha</button>
+          </nav>
+          {taskView === 'date' && <label className="task-date-picker">Ver tareas del día
+            <input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.currentTarget.value)} />
+          </label>}
+          {taskView === 'today' && <p>Incluye tareas pendientes de días anteriores.</p>}
           <form className="task-form" onSubmit={addTask}>
             <label>Nueva tarea<input name="title" maxLength={160} required placeholder="¿Qué hay que hacer?" /></label>
             <PixelSelect label="Prioridad" name="priority" value={newTaskPriority} options={taskPriorityOptions}
               onValueChange={(value) => setNewTaskPriority(value as TaskPriority)} />
-            <label>Fecha límite<input type="date" name="due_on" /></label>
+            <label>Fecha límite<input type="date" name="due_on" key={`${taskView}-${selectedDate}`}
+              defaultValue={taskView === 'today' ? today : taskView === 'tomorrow' ? tomorrow : taskView === 'date' ? selectedDate : ''} /></label>
             <PixelSelect label="Visibilidad" name="scope" onValueChange={setTaskScope}
               options={canEditHome ? [taskVisibilityOptions[0], {
                 value: 'home', label: space.state === 'retained' ? 'Casa conservada' : 'Compartida',
@@ -463,9 +501,9 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
               placeholder="Materiales, pasos o ayuda que necesitas" rows={2} /></label>
             <button disabled={busy}>Añadir</button>
           </form>
-          {tasks.length === 0 ? <p>Aún no hay tareas.</p> : (
+          {visibleTasks.length === 0 ? <p>{taskView === 'backlog' ? 'Aún no hay tareas.' : 'No hay tareas pendientes para esta fecha.'}</p> : (
             <ul className="tasks">
-              {orderedTasks.map((task) => <li key={task.id} className={task.completed ? 'task-completed' : undefined}>
+              {visibleTasks.map((task) => <li key={task.id} className={task.completed ? 'task-completed' : undefined}>
                 <label><input type="checkbox" checked={task.completed} disabled={busy || (task.space_id !== null && !canEditHome)}
                   onChange={(event) => {
                     const done = event.currentTarget.checked;
@@ -477,6 +515,7 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
                 <div className="task-meta">
                   <span className={`task-priority priority-${task.priority}`}>Prioridad {task.priority === 'high' ? 'alta' : task.priority === 'low' ? 'baja' : 'normal'}</span>
                   <small>{task.space_id ? 'Casa' : 'Personal'}</small>
+                  {!task.completed && task.due_on && task.due_on < today && <strong className="task-overdue">Atrasada</strong>}
                   {task.due_on && <time dateTime={task.due_on}>Para {new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${task.due_on}T00:00:00Z`))}</time>}
                   {task.requirements && <p>{task.requirements}</p>}
                 </div>

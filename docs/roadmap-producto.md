@@ -11,7 +11,7 @@ Esta lista recoge las funciones solicitadas para la app de pareja y el estado ac
 ## Fase 2: tareas, metas y calendario
 
 - [x] Backlog con prioridad, fecha, requisitos y recursos necesarios para completar cada tarea.
-- [ ] Vistas de tareas para hoy, mañana y una fecha seleccionada, ordenadas por prioridad.
+- [x] Vistas de tareas para hoy, mañana y una fecha seleccionada, ordenadas por prioridad.
 - [ ] Integración con Google Calendar y recordatorios, con autorización OAuth individual y revocable.
 - [ ] Metas compartidas con porcentaje de avance, barra de progreso y reflejo del progreso en la casa.
 - [ ] Recordatorios configurables, incluidos hábitos como el recordatorio diario de Duolingo.

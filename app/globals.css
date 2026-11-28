@@ -101,6 +101,10 @@ p { color: var(--muted); line-height: 1.55; }
 .room-art canvas { image-rendering: pixelated; }
 .room-fallback { display: grid; min-height: 240px; padding: 1rem; place-items: center; text-align: center; }
 .task-form { display: grid; grid-template-columns: minmax(12rem, 2fr) repeat(3, minmax(8rem, 1fr)) auto; gap: .65rem; align-items: end; }
+.task-views { display: flex; flex-wrap: wrap; gap: .5rem; }
+.task-views button[aria-pressed=true] { background: var(--green); color: white; }
+.task-views button span { display: inline-grid; min-width: 1.4rem; height: 1.4rem; margin-left: .2rem; padding-inline: .25rem; place-items: center; border: 1px solid currentColor; font-size: .8rem; }
+.task-date-picker { max-width: 18rem; }
 .task-form .pixel-select-field { min-width: 9rem; }
 .task-requirements { grid-column: 1 / -2; }
 .tasks { list-style: none; padding: 0; margin: 0; }
@@ -115,6 +119,7 @@ p { color: var(--muted); line-height: 1.55; }
 .priority-high { color: #8a332e; }
 .priority-medium { color: #526254; }
 .priority-low { color: #526579; }
+.task-overdue { color: #8a332e; }
 .task-edit-form { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(8rem, .7fr) minmax(10rem, 1fr) minmax(14rem, 2fr) auto; align-items: end; gap: .65rem; padding: .65rem; background: #f0e7c7; }
 .task-edit-form .task-requirements { grid-column: auto; }
 .separation { padding-top: .5rem; }
