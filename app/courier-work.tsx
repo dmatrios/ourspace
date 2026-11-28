@@ -25,8 +25,8 @@ function cents(value: string | number | null) {
   return Number(whole) * 100 + Number(fraction.padEnd(2, '0').slice(0, 2));
 }
 function localDateTime(value: string) {
-  const date = new Date(value);
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Lima', year: 'numeric', month: '2-digit',
+    day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value)).replace(' ', 'T').slice(0, 16);
 }
 
 export default function CourierWork({ client, userId, onRoleChange }: {
@@ -248,8 +248,8 @@ export default function CourierWork({ client, userId, onRoleChange }: {
                   <form className="courier-form" onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget);
                     if (!window.confirm('¿Confirmas la corrección de esta jornada?')) return;
                     void act(async () => { const { error } = await client.rpc('courier_correct_shift_time', {
-                      p_shift_id: shift.id, p_started_at: new Date(String(data.get('started_at'))).toISOString(),
-                      p_ended_at: new Date(String(data.get('ended_at'))).toISOString(),
+                      p_shift_id: shift.id, p_started_at: new Date(`${data.get('started_at')}:00-05:00`).toISOString(),
+                      p_ended_at: new Date(`${data.get('ended_at')}:00-05:00`).toISOString(),
                     }); if (error) throw error; }, 'Horario corregido.'); }}>
                     <label>Inicio<input type="datetime-local" name="started_at" defaultValue={localDateTime(shift.started_at)} required /></label>
                     <label>Final<input type="datetime-local" name="ended_at" defaultValue={localDateTime(shift.ended_at!)} required /></label>

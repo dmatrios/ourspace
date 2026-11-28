@@ -25,7 +25,7 @@ before(async () => {
     create function realtime.topic() returns text language sql stable as
       $$ select current_setting('realtime.topic', true) $$;
   `);
-  for (const migration of ['20261121000100_first_space.sql', '20261121000200_room_style.sql', '20261121000300_couple_onboarding.sql', '20261126000200_six_digit_invitation_codes.sql', '20261127000100_onboarding_while_waiting.sql', '20261127000200_avatar_customization.sql', '20261127000300_task_backlog_details.sql', '20261127000400_expenses.sql', '20261127000500_live_room_presence.sql', '20261128000100_courier_role_avatar.sql', '20261128000200_courier_work.sql', '20261128000300_self_deletion.sql']) {
+  for (const migration of ['20261121000100_first_space.sql', '20261121000200_room_style.sql', '20261121000300_couple_onboarding.sql', '20261126000200_six_digit_invitation_codes.sql', '20261127000100_onboarding_while_waiting.sql', '20261127000200_avatar_customization.sql', '20261127000300_task_backlog_details.sql', '20261127000400_expenses.sql', '20261127000500_live_room_presence.sql', '20261128000100_courier_role_avatar.sql', '20261128000200_courier_work.sql', '20261128000300_self_deletion.sql', '20261128000400_vehicle_odometer.sql']) {
     await db.exec(await readFile('supabase/migrations/' + migration, 'utf8'));
   }
   await db.exec(`
@@ -159,10 +159,12 @@ test('el rol de repartidor desbloquea su skin y mantiene privado el trabajo', as
   assert.deepEqual(await as(b, 'select * from courier_platforms'), []);
   await assert.rejects(as(b, 'insert into courier_shifts(user_id, platform_id) values ($1, $2)', [b, platform]), /permission denied/);
   const shift = await value(a, 'select id from courier_start_shift($1, 100, 20)', [platform]);
+  await as(a, "insert into courier_vehicles(user_id,name,odometer_km) values ($1,'Moto',100)", [a]);
   await assert.rejects(as(a, "select courier_transition_shift($1, 'pause')", [shift]), /Odometer required/);
   assert.equal(await value(a, "select status from courier_transition_shift($1, 'pause', 105)", [shift]), 'paused');
   assert.equal(await value(a, "select status from courier_transition_shift($1, 'resume', 106)", [shift]), 'active');
   assert.equal(await value(a, "select status from courier_transition_shift($1, 'finish', 112)", [shift]), 'completed');
+  assert.equal(await value(a, 'select odometer_km from courier_vehicles'), '112.0');
   await assert.rejects(as(b, "select courier_count_cash($1, 30)", [shift]), /unavailable/);
   assert.deepEqual(await as(b, 'select * from courier_shifts'), []);
   const earning = await value(a, `insert into courier_earnings(user_id,platform_id,shift_id,earned_on,mode,reported_amount)
