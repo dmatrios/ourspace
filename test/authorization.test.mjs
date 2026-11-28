@@ -17,8 +17,15 @@ before(async () => {
     create function auth.uid() returns uuid language sql stable as
       $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     grant usage on schema auth to authenticated;
+    create schema realtime;
+    create table realtime.messages(extension text not null);
+    alter table realtime.messages enable row level security;
+    grant usage on schema realtime to authenticated;
+    grant select, insert on realtime.messages to authenticated;
+    create function realtime.topic() returns text language sql stable as
+      $$ select current_setting('realtime.topic', true) $$;
   `);
-  for (const migration of ['20261121000100_first_space.sql', '20261121000200_room_style.sql', '20261121000300_couple_onboarding.sql', '20261126000200_six_digit_invitation_codes.sql', '20261127000100_onboarding_while_waiting.sql', '20261127000200_avatar_customization.sql', '20261127000300_task_backlog_details.sql', '20261127000400_expenses.sql']) {
+  for (const migration of ['20261121000100_first_space.sql', '20261121000200_room_style.sql', '20261121000300_couple_onboarding.sql', '20261126000200_six_digit_invitation_codes.sql', '20261127000100_onboarding_while_waiting.sql', '20261127000200_avatar_customization.sql', '20261127000300_task_backlog_details.sql', '20261127000400_expenses.sql', '20261127000500_live_room_presence.sql']) {
     await db.exec(await readFile('supabase/migrations/' + migration, 'utf8'));
   }
   await db.exec(`
@@ -40,6 +47,15 @@ async function as(user, sql, params = []) {
 async function value(user, sql, params) {
   const [row] = await as(user, sql, params);
   return row && Object.values(row)[0];
+}
+
+async function asRealtime(user, topic, sql) {
+  return db.transaction(async (tx) => {
+    await tx.exec(user ? 'set local role authenticated' : 'set local role anon');
+    if (user) await tx.query("select set_config('request.jwt.claim.sub', $1, true)", [user]);
+    await tx.query("select set_config('realtime.topic', $1, true)", [topic]);
+    return (await tx.query(sql)).rows;
+  });
 }
 
 async function pair(owner, partner, email) {
@@ -122,6 +138,17 @@ test('los gastos personales son privados y los compartidos validan al pagador', 
   assert.equal(await value(a, 'update expenses set paid_by = $1 where id = $2 returning paid_by', [b, shared]), b);
 });
 
+test('la presencia y movimiento en vivo sólo permiten integrantes vinculados', async () => {
+  const home = await value(a, 'select id from spaces');
+  const topic = `ourspace:room:${home}`;
+  assert.deepEqual(await asRealtime(a, topic, "insert into realtime.messages(extension) values ('presence') returning extension"), [{ extension: 'presence' }]);
+  assert.deepEqual(await asRealtime(b, topic, "insert into realtime.messages(extension) values ('broadcast') returning extension"), [{ extension: 'broadcast' }]);
+  assert.equal((await asRealtime(b, topic, 'select extension from realtime.messages')).length, 2);
+  assert.deepEqual(await asRealtime(c, topic, 'select extension from realtime.messages'), []);
+  await assert.rejects(asRealtime(c, topic, "insert into realtime.messages(extension) values ('presence')"), /row-level security/);
+  await assert.rejects(asRealtime(a, 'ourspace:room:otro', "insert into realtime.messages(extension) values ('presence')"), /row-level security/);
+});
+
 test('una tarea privada queda aislada, la compartida persiste y el exmiembro pierde acceso', async () => {
   const home = await value(a, 'select id from spaces');
   await as(a, 'insert into tasks(owner_id, title) values ($1, $2)', [a, 'Privada']);
@@ -133,6 +160,8 @@ test('una tarea privada queda aislada, la compartida persiste y el exmiembro pie
   assert.equal(await value(a, 'update tasks set completed = true where id = $1 returning completed', [shared]), true);
   assert.equal(await value(b, 'select completed from tasks where id = $1', [shared]), true);
   assert.equal(await value(a, 'select leave_space()'), true);
+  assert.deepEqual(await asRealtime(a, `ourspace:room:${home}`, 'select extension from realtime.messages'), []);
+  assert.deepEqual(await asRealtime(b, `ourspace:room:${home}`, 'select extension from realtime.messages'), []);
   assert.equal(await value(a, 'select title from tasks'), 'Privada');
   assert.equal(await value(a, 'select export_separated_space()'), null);
   assert.equal(await value(a, 'select get_couple_onboarding($1)', [home]), null);

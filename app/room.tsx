@@ -1,19 +1,43 @@
 'use client';
 
 import { Canvas, useFrame } from '@react-three/fiber';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Group } from 'three';
 import PixelSelect, { type PixelSelectOption } from './pixel-select';
 import type { AvatarAppearance, AvatarHairColor, AvatarHairStyle, AvatarOutfit, MemberAvatar } from './avatar';
+import { connect } from '../lib/supabase';
 import { roomPalettes, type RoomPalette } from '../lib/room-style';
 
 type Position = [number, number, number];
+type Client = NonNullable<ReturnType<typeof connect>>;
+type Channel = ReturnType<Client['channel']>;
 
 function Block({ position, size, color }: { position: Position; size: Position; color: string }) {
   return <mesh position={position}><boxGeometry args={size} /><meshStandardMaterial color={color} /></mesh>;
 }
 
 type Destination = { x: number; z: number };
+type Partner = { userId: string; destination: Destination; appearance: AvatarAppearance };
+const initialDestination: Destination = { x: 0.36, z: 1.08 };
+const partnerStart: Destination = { x: -0.42, z: 1.08 };
+
+function readDestination(value: unknown): Destination | null {
+  if (!value || typeof value !== 'object') return null;
+  const point = value as Record<string, unknown>;
+  if (typeof point.x !== 'number' || typeof point.z !== 'number'
+    || !Number.isFinite(point.x) || !Number.isFinite(point.z)) return null;
+  return insideRoom(point.x, point.z);
+}
+
+function readAppearance(value: unknown): AvatarAppearance | null {
+  if (!value || typeof value !== 'object') return null;
+  const appearance = value as Record<string, unknown>;
+  if (!['neutral', 'masculine', 'feminine'].includes(String(appearance.silhouette))
+    || !['short', 'long', 'curly'].includes(String(appearance.hair_style))
+    || !['brown', 'black', 'blonde'].includes(String(appearance.hair_color))
+    || !['sage', 'plum', 'ocean', 'coral'].includes(String(appearance.outfit))) return null;
+  return appearance as AvatarAppearance;
+}
 
 const outfitColors: Record<AvatarOutfit, string> = {
   sage: '#668663', plum: '#946085', ocean: '#52758a', coral: '#c66f5e',
@@ -57,6 +81,11 @@ function Avatar({ destination, appearance, reducedMotion }: {
   const avatar = useRef<Group>(null);
   const legs = useRef<Group>(null);
   const phase = useRef(0);
+  const [startingPosition] = useState(destination);
+
+  useLayoutEffect(() => {
+    avatar.current?.position.set(startingPosition.x, 0, startingPosition.z);
+  }, [startingPosition]);
 
   useFrame(({ invalidate }, delta) => {
     const body = avatar.current;
@@ -111,12 +140,20 @@ function insideRoom(x: number, z: number): Destination {
   return { x: Math.max(-1.12, Math.min(2.42, x)), z: Math.max(-0.88, Math.min(2.07, z)) };
 }
 
-export default function Room({ completed, palette, avatar, onAvatarChange, openTasks }: {
+export default function Room({ completed, palette, avatar, client, spaceId, userId, ownerId, paired, onAvatarChange, openTasks }: {
   completed: number; palette: RoomPalette; avatar: MemberAvatar;
+  client: Client; spaceId: string; userId: string; ownerId: string; paired: boolean;
   onAvatarChange: (appearance: AvatarAppearance) => Promise<void>; openTasks: () => void;
 }) {
   const colors = roomPalettes[palette];
-  const [destination, setDestination] = useState<Destination>({ x: 0.36, z: 1.08 });
+  const [destination, setDestination] = useState<Destination>(() => userId === ownerId ? initialDestination : partnerStart);
+  const [partner, setPartner] = useState<Partner | null>(null);
+  const [liveStatus, setLiveStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
+  const channelRef = useRef<Channel | null>(null);
+  const partnerId = useRef<string | null>(null);
+  const latestDestination = useRef(destination);
+  const latestAppearance = useRef(avatar.appearance);
+  const trackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const [savingAppearance, setSavingAppearance] = useState(false);
   const [appearanceMessage, setAppearanceMessage] = useState('');
@@ -128,8 +165,81 @@ export default function Room({ completed, palette, avatar, onAvatarChange, openT
     return () => preference.removeEventListener('change', update);
   }, []);
 
+  useEffect(() => {
+    if (!paired) return;
+    let active = true;
+    const channel = client.channel(`ourspace:room:${spaceId}`, {
+      config: { private: true, presence: { key: userId, enabled: true }, broadcast: { self: false } },
+    });
+    const syncPartner = () => {
+      if (!active) return;
+      for (const [key, entries] of Object.entries(channel.presenceState())) {
+        if (key === userId) continue;
+        for (const entry of entries) {
+          const data = entry as Record<string, unknown>;
+          const position = readDestination(data.destination);
+          const appearance = readAppearance(data.appearance);
+          if (position && appearance) {
+            partnerId.current = key;
+            setPartner({ userId: key, destination: position, appearance });
+            return;
+          }
+        }
+      }
+      partnerId.current = null;
+      setPartner(null);
+    };
+    channel.on('presence', { event: 'sync' }, syncPartner);
+    channel.on('broadcast', { event: 'move' }, ({ payload }) => {
+      if (!active) return;
+      if (payload.user_id !== partnerId.current) return;
+      const position = readDestination(payload.destination);
+      if (position) setPartner((current) => current ? { ...current, destination: position } : null);
+    });
+    channel.subscribe((status) => {
+      if (!active) return;
+      if (status === 'SUBSCRIBED') {
+        channelRef.current = channel;
+        void channel.track({ user_id: userId, destination: latestDestination.current,
+          appearance: latestAppearance.current }).then((result) => {
+            if (active) setLiveStatus(result === 'ok' ? 'connected' : 'error');
+          }).catch(() => { if (active) setLiveStatus('error'); });
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        setLiveStatus('error');
+        setPartner(null);
+      }
+    });
+    return () => {
+      active = false;
+      channelRef.current = null;
+      partnerId.current = null;
+      if (trackTimer.current) clearTimeout(trackTimer.current);
+      void client.removeChannel(channel);
+    };
+  }, [client, paired, spaceId, userId]);
+
+  useEffect(() => {
+    latestAppearance.current = avatar.appearance;
+    if (channelRef.current) void channelRef.current.track({ user_id: userId,
+      destination: latestDestination.current, appearance: avatar.appearance });
+  }, [avatar.appearance, userId]);
+
+  function goTo(position: Destination) {
+    latestDestination.current = position;
+    setDestination(position);
+    const channel = channelRef.current;
+    if (!channel) return;
+    void channel.send({ type: 'broadcast', event: 'move', payload: { user_id: userId, destination: position } });
+    if (trackTimer.current) clearTimeout(trackTimer.current);
+    trackTimer.current = setTimeout(() => {
+      void channel.track({ user_id: userId, destination: latestDestination.current,
+        appearance: latestAppearance.current });
+    }, 350);
+  }
+
   function move(dx: number, dz: number) {
-    setDestination(({ x, z }) => insideRoom(x + dx, z + dz));
+    const { x, z } = latestDestination.current;
+    goTo(insideRoom(x + dx, z + dz));
   }
 
   async function changeAppearance(field: keyof AvatarAppearance, value: string) {
@@ -161,11 +271,13 @@ export default function Room({ completed, palette, avatar, onAvatarChange, openT
           <mesh position={[0, 0.003, 0]} rotation={[-Math.PI / 2, 0, 0]}
             onClick={({ point, stopPropagation }) => {
               stopPropagation();
-              setDestination(insideRoom(point.x, point.z));
+              goTo(insideRoom(point.x, point.z));
             }}>
             <planeGeometry args={[6, 5]} /><meshBasicMaterial visible={false} />
           </mesh>
           <Avatar destination={destination} appearance={avatar.appearance} reducedMotion={reducedMotion} />
+          {paired && partner && <Avatar key={partner.userId} destination={partner.destination}
+            appearance={partner.appearance} reducedMotion={reducedMotion} />}
           <Block position={[0, -0.2, 0]} size={[6, 0.4, 5]} color="#bb845f" />
           <Block position={[0, 1, -2.42]} size={[6, 2, 0.16]} color={colors.wall} />
           <Block position={[-2.92, 1, 0]} size={[0.16, 2, 4.7]} color={colors.side} />
@@ -196,6 +308,9 @@ export default function Room({ completed, palette, avatar, onAvatarChange, openT
           <Block position={[-2.14, 0.85, -1.58]} size={[0.45, 0.16, 0.21]} color="#729761" />
         </Canvas>
       </div>
+      {paired && <p role="status" className="room-presence-status">{partner ? 'Tu pareja está en la casa contigo.'
+        : liveStatus === 'error' ? 'No se pudo conectar la casa en vivo. Recarga la página para reintentar.'
+          : liveStatus === 'connecting' ? 'Conectando la casa en vivo…' : 'Tu pareja no está en la casa ahora.'}</p>}
       <div className="room-controls">
         <div className="room-control-row">
           <div className="d-pad" role="group" aria-label="Mover avatar" onKeyDown={(event) => {

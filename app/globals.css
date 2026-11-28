@@ -99,6 +99,7 @@ p { color: var(--muted); line-height: 1.55; }
 .room { overflow: hidden; border: 2px solid var(--wood); background: #bfc6a1; }
 .room-art { height: clamp(252px, 54vw, 440px); }
 .room-art canvas { image-rendering: pixelated; }
+.room-presence-status { margin: 0; padding: .55rem .75rem; border-top: 2px solid var(--wood); background: #f0e7c7; font-size: .9rem; }
 .room-fallback { display: grid; min-height: 240px; padding: 1rem; place-items: center; text-align: center; }
 .task-form { display: grid; grid-template-columns: minmax(12rem, 2fr) repeat(3, minmax(8rem, 1fr)) auto; gap: .65rem; align-items: end; }
 .task-views { display: flex; flex-wrap: wrap; gap: .5rem; }

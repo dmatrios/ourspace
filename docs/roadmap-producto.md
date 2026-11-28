@@ -18,7 +18,7 @@ Esta lista recoge las funciones solicitadas para la app de pareja y el estado ac
 
 ## Fase 3: presencia y comunicación
 
-- [ ] Presencia simultánea de ambos avatares y movimiento en vivo en el mismo espacio.
+- [x] Presencia simultánea de ambos avatares y movimiento en vivo en el mismo espacio.
 - [ ] Notificaciones entre integrantes, incluyendo “Te extraño”.
 - [ ] Chat en tiempo real dentro de Our Space.
 - [ ] Animaciones e interacciones de abrazo, beso y tomarse de la mano.

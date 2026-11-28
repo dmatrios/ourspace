@@ -16,7 +16,7 @@ const Room = dynamic(() => import('./room'), { ssr: false, loading: () => <div c
 const Expenses = dynamic(() => import('./expenses'), { ssr: false, loading: () => <p>Cargando gastos…</p> });
 
 type Client = NonNullable<ReturnType<typeof connect>>;
-type Space = { id: string; state: 'waiting' | 'paired' | 'separated' | 'retained' };
+type Space = { id: string; owner_id: string; state: 'waiting' | 'paired' | 'separated' | 'retained' };
 type TaskPriority = 'high' | 'medium' | 'low';
 type TaskView = 'backlog' | 'today' | 'tomorrow' | 'date';
 type Task = {
@@ -215,7 +215,7 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
   const refresh = useCallback(async () => {
     const current = ++generation.current;
     const [home, list, request] = await Promise.all([
-      client.from('spaces').select('id,state').maybeSingle(),
+      client.from('spaces').select('id,owner_id,state').maybeSingle(),
       client.from('tasks').select('id,space_id,title,completed,priority,due_on,requirements,created_at'),
       client.rpc('pending_partner'),
     ]);
@@ -371,6 +371,7 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
                 {homeTasks.length > 0 && <progress aria-label="Progreso de tareas de la casa" value={completed} max={homeTasks.length} />}
               </div>
               <Room key={space.id} completed={completed} palette={roomStyle?.palette ?? 'forest'} avatar={memberAvatar}
+                client={client} spaceId={space.id} userId={userId} ownerId={space.owner_id} paired={space.state === 'paired'}
                 onAvatarChange={saveAvatar} openTasks={() => setTab('tasks')} />
               {canEditHome && roomStyle && (
                 <fieldset className="room-palettes" disabled={busy}>

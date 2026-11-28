@@ -24,6 +24,8 @@ Puedes tocar el suelo o usar las flechas para mover al avatar. Los botones de di
 
 La decoración compartida (Bosque, Atardecer o Noche) se guarda en Supabase con una revisión para evitar sobrescribir cambios de la otra persona. Para habilitarla en una instalación con la primera migración aplicada, aplica `20261121000200_room_style.sql`. Mientras tanto, la casa funciona con la decoración Bosque.
 
+Cuando ambos integrantes abren la casa, ven los dos avatares y sus movimientos en vivo. La migración `20261127000500_live_room_presence.sql` autoriza un canal privado de Supabase Realtime únicamente para integrantes de una casa vinculada. Cada persona debe iniciar sesión y abrir la casa en su navegador para aparecer en ella; el movimiento no queda guardado como historial.
+
 ## Bienvenida de pareja
 
 Después de vincularse, cada integrante puede compartir su nombre, sus intereses y sus metas a corto y largo plazo. La fecha de inicio es compartida. Los campos se pueden editar desde **Su historia**. Aplica `20261121000300_couple_onboarding.sql` después de las migraciones anteriores para habilitar este flujo.
