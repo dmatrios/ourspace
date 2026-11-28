@@ -4,6 +4,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { useEffect, useRef, useState } from 'react';
 import type { Group } from 'three';
 import PixelSelect, { type PixelSelectOption } from './pixel-select';
+import type { AvatarAppearance, AvatarHairColor, AvatarHairStyle, AvatarOutfit, MemberAvatar } from './avatar';
 import { roomPalettes, type RoomPalette } from '../lib/room-style';
 
 type Position = [number, number, number];
@@ -14,16 +15,44 @@ function Block({ position, size, color }: { position: Position; size: Position; 
 
 type Destination = { x: number; z: number };
 
-const avatarColors = { sage: '#668663', plum: '#946085', ocean: '#52758a' };
-type AvatarColor = keyof typeof avatarColors;
-const avatarColorOptions: PixelSelectOption[] = [
-  { value: 'sage', label: 'Verde' },
-  { value: 'plum', label: 'Ciruela' },
-  { value: 'ocean', label: 'Azul' },
+const outfitColors: Record<AvatarOutfit, string> = {
+  sage: '#668663', plum: '#946085', ocean: '#52758a', coral: '#c66f5e',
+};
+const hairColors: Record<AvatarHairColor, string> = { brown: '#5b4439', black: '#302d35', blonde: '#d2a85e' };
+const silhouetteOptions: PixelSelectOption[] = [
+  { value: 'neutral', label: 'Neutra' },
+  { value: 'masculine', label: 'Masculina' },
+  { value: 'feminine', label: 'Femenina' },
 ];
+const hairStyleLabels: Record<AvatarHairStyle, string> = { short: 'Corto', long: 'Largo', curly: 'Rizado' };
+const hairColorOptions: PixelSelectOption[] = [
+  { value: 'brown', label: 'Castaño' },
+  { value: 'black', label: 'Negro' },
+  { value: 'blonde', label: 'Rubio' },
+];
+const outfitLabels: Record<AvatarOutfit, string> = { sage: 'Verde', plum: 'Ciruela', ocean: 'Azul', coral: 'Coral' };
 
-function Avatar({ destination, color, reducedMotion }: {
-  destination: Destination; color: string; reducedMotion: boolean;
+function Hair({ style, color }: { style: AvatarHairStyle; color: string }) {
+  return (
+    <group>
+      <Block position={[0, 0.72, 0]} size={[0.32, 0.09, 0.29]} color={color} />
+      {style === 'short' && <Block position={[0, 0.65, -0.09]} size={[0.27, 0.13, 0.12]} color={color} />}
+      {style === 'long' && <>
+        <Block position={[-0.13, 0.53, -0.01]} size={[0.09, 0.32, 0.2]} color={color} />
+        <Block position={[0.13, 0.53, -0.01]} size={[0.09, 0.32, 0.2]} color={color} />
+        <Block position={[0, 0.42, -0.08]} size={[0.27, 0.11, 0.1]} color={color} />
+      </>}
+      {style === 'curly' && <>
+        {[-0.1, 0, 0.1].map((x) => <Block key={x} position={[x, 0.79, 0]} size={[0.1, 0.1, 0.1]} color={color} />)}
+        <Block position={[-0.14, 0.7, -0.02]} size={[0.1, 0.12, 0.15]} color={color} />
+        <Block position={[0.14, 0.7, -0.02]} size={[0.1, 0.12, 0.15]} color={color} />
+      </>}
+    </group>
+  );
+}
+
+function Avatar({ destination, appearance, reducedMotion }: {
+  destination: Destination; appearance: AvatarAppearance; reducedMotion: boolean;
 }) {
   const avatar = useRef<Group>(null);
   const legs = useRef<Group>(null);
@@ -60,11 +89,11 @@ function Avatar({ destination, color, reducedMotion }: {
           <Block position={[0, -0.15, 0.02]} size={[0.15, 0.1, 0.19]} color="#473642" />
         </group>)}
       </group>
-      <Block position={[0, 0.33, 0]} size={[0.34, 0.29, 0.24]} color={color} />
-      <Block position={[-0.211, 0.32, 0]} size={[0.082, 0.22, 0.18]} color={color} />
-      <Block position={[0.211, 0.32, 0]} size={[0.082, 0.22, 0.18]} color={color} />
+      <Block position={[0, 0.33, 0]} size={appearance.silhouette === 'masculine' ? [0.4, 0.3, 0.25] : appearance.silhouette === 'feminine' ? [0.32, 0.3, 0.24] : [0.35, 0.29, 0.24]} color={outfitColors[appearance.outfit]} />
+      <Block position={[-0.211, 0.32, 0]} size={[0.082, 0.22, 0.18]} color={outfitColors[appearance.outfit]} />
+      <Block position={[0.211, 0.32, 0]} size={[0.082, 0.22, 0.18]} color={outfitColors[appearance.outfit]} />
       <Block position={[0, 0.57, 0.02]} size={[0.28, 0.28, 0.24]} color="#d9a075" />
-      <Block position={[0, 0.72, 0]} size={[0.31, 0.09, 0.29]} color="#5b4439" />
+      <Hair style={appearance.hair_style} color={hairColors[appearance.hair_color]} />
       <Block position={[-0.065, 0.57, 0.148]} size={[0.035, 0.034, 0.014]} color="#4f3835" />
       <Block position={[0.065, 0.57, 0.148]} size={[0.035, 0.034, 0.014]} color="#4f3835" />
     </group>
@@ -82,20 +111,15 @@ function insideRoom(x: number, z: number): Destination {
   return { x: Math.max(-1.12, Math.min(2.42, x)), z: Math.max(-0.88, Math.min(2.07, z)) };
 }
 
-export default function Room({ completed, palette, userId, openTasks }: {
-  completed: number; palette: RoomPalette; userId: string; openTasks: () => void;
+export default function Room({ completed, palette, avatar, onAvatarChange, openTasks }: {
+  completed: number; palette: RoomPalette; avatar: MemberAvatar;
+  onAvatarChange: (appearance: AvatarAppearance) => Promise<void>; openTasks: () => void;
 }) {
   const colors = roomPalettes[palette];
-  const avatarPreference = 'ourspace-avatar-color:' + userId;
   const [destination, setDestination] = useState<Destination>({ x: 0.36, z: 1.08 });
   const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  const [avatarColor, setAvatarColor] = useState<AvatarColor>(() => {
-    try {
-      const color = localStorage.getItem(avatarPreference);
-      if (color === 'plum' || color === 'ocean') return color;
-    } catch { /* Avatar stays usable when local storage is unavailable. */ }
-    return 'sage';
-  });
+  const [savingAppearance, setSavingAppearance] = useState(false);
+  const [appearanceMessage, setAppearanceMessage] = useState('');
 
   useEffect(() => {
     const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -107,6 +131,24 @@ export default function Room({ completed, palette, userId, openTasks }: {
   function move(dx: number, dz: number) {
     setDestination(({ x, z }) => insideRoom(x + dx, z + dz));
   }
+
+  async function changeAppearance(field: keyof AvatarAppearance, value: string) {
+    if (savingAppearance) return;
+    const next = { ...avatar.appearance, [field]: value } as AvatarAppearance;
+    setSavingAppearance(true);
+    setAppearanceMessage('');
+    try {
+      await onAvatarChange(next);
+      setAppearanceMessage('Estilo guardado.');
+    } catch {
+      setAppearanceMessage('No se pudo guardar. Inténtalo de nuevo.');
+    } finally {
+      setSavingAppearance(false);
+    }
+  }
+
+  const hairstyleOptions = avatar.progress.unlocked_hair_styles.map((style) => ({ value: style, label: hairStyleLabels[style] }));
+  const outfitOptions = avatar.progress.unlocked_outfits.map((outfit) => ({ value: outfit, label: outfitLabels[outfit] }));
 
   return (
     <div className="room" style={{ backgroundColor: colors.background }}>
@@ -123,7 +165,7 @@ export default function Room({ completed, palette, userId, openTasks }: {
             }}>
             <planeGeometry args={[6, 5]} /><meshBasicMaterial visible={false} />
           </mesh>
-          <Avatar destination={destination} color={avatarColors[avatarColor]} reducedMotion={reducedMotion} />
+          <Avatar destination={destination} appearance={avatar.appearance} reducedMotion={reducedMotion} />
           <Block position={[0, -0.2, 0]} size={[6, 0.4, 5]} color="#bb845f" />
           <Block position={[0, 1, -2.42]} size={[6, 2, 0.16]} color={colors.wall} />
           <Block position={[-2.92, 1, 0]} size={[0.16, 2, 4.7]} color={colors.side} />
@@ -155,23 +197,41 @@ export default function Room({ completed, palette, userId, openTasks }: {
         </Canvas>
       </div>
       <div className="room-controls">
-        <div className="d-pad" role="group" aria-label="Mover avatar" onKeyDown={(event) => {
+        <div className="room-control-row">
+          <div className="d-pad" role="group" aria-label="Mover avatar" onKeyDown={(event) => {
           const direction = movement.find(({ key }) => key === event.key);
           if (!direction) return;
           event.preventDefault();
           move(direction.dx, direction.dz);
-        }}>
-          {movement.map(({ key, symbol, label, dx, dz }) => (
-            <button className="secondary" key={key} type="button" aria-label={label} onClick={() => move(dx, dz)}>{symbol}</button>
-          ))}
+          }}>
+            {movement.map(({ key, symbol, label, dx, dz }) => (
+              <button className="secondary" key={key} type="button" aria-label={label} onClick={() => move(dx, dz)}>{symbol}</button>
+            ))}
+          </div>
+          <button className="desk-button" onClick={openTasks}>Abrir tareas del escritorio</button>
         </div>
-        <PixelSelect className="avatar-color" label="Ropa" name="avatar-color" value={avatarColor}
-          options={avatarColorOptions} onValueChange={(value) => {
-            const color = value as AvatarColor;
-            setAvatarColor(color);
-            try { localStorage.setItem(avatarPreference, color); } catch { /* Optional preference. */ }
-          }} />
-        <button className="desk-button" onClick={openTasks}>Abrir tareas del escritorio</button>
+        <section className="avatar-customization" aria-labelledby="avatar-customization-title">
+          <h2 id="avatar-customization-title">Personaliza tu avatar</h2>
+          <fieldset className="avatar-options" disabled={savingAppearance}>
+            <PixelSelect label="Silueta" name="avatar-silhouette" value={avatar.appearance.silhouette}
+              options={silhouetteOptions} onValueChange={(value) => void changeAppearance('silhouette', value)} />
+            <PixelSelect label="Cabello" name="avatar-hair-style" value={avatar.appearance.hair_style}
+              options={hairstyleOptions} onValueChange={(value) => void changeAppearance('hair_style', value)} />
+            <PixelSelect label="Color de cabello" name="avatar-hair-color" value={avatar.appearance.hair_color}
+              options={hairColorOptions} onValueChange={(value) => void changeAppearance('hair_color', value)} />
+            <PixelSelect label="Ropa" name="avatar-outfit" value={avatar.appearance.outfit}
+              options={outfitOptions} onValueChange={(value) => void changeAppearance('outfit', value)} />
+          </fieldset>
+          <p className="avatar-progress">{avatar.progress.completed_tasks} tareas completadas · {avatar.progress.active_days} días activos</p>
+          <ul className="avatar-unlocks">
+            <li aria-label={avatar.progress.completed_tasks >= 3 ? 'Desbloqueado' : 'Bloqueado'}>{avatar.progress.completed_tasks >= 3 ? '✓' : '🔒'} Cabello largo · 3 tareas completadas</li>
+            <li aria-label={avatar.progress.active_days >= 7 ? 'Desbloqueado' : 'Bloqueado'}>{avatar.progress.active_days >= 7 ? '✓' : '🔒'} Cabello rizado · 7 días activos</li>
+            <li aria-label={avatar.progress.active_days >= 3 ? 'Desbloqueado' : 'Bloqueado'}>{avatar.progress.active_days >= 3 ? '✓' : '🔒'} Ropa ciruela · 3 días activos</li>
+            <li aria-label={avatar.progress.completed_tasks >= 5 ? 'Desbloqueado' : 'Bloqueado'}>{avatar.progress.completed_tasks >= 5 ? '✓' : '🔒'} Ropa azul · 5 tareas completadas</li>
+            <li aria-label={avatar.progress.active_days >= 14 ? 'Desbloqueado' : 'Bloqueado'}>{avatar.progress.active_days >= 14 ? '✓' : '🔒'} Ropa coral · 14 días activos</li>
+          </ul>
+          {appearanceMessage && <p role="status">{appearanceMessage}</p>}
+        </section>
       </div>
     </div>
   );

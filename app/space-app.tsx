@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import CoupleOnboarding, { type CoupleOnboardingData } from './couple-onboarding';
+import { defaultAvatar, type AvatarAppearance, type MemberAvatar } from './avatar';
 import InvitationActions from './invitation-actions';
 import PixelSelect, { type PixelSelectOption } from './pixel-select';
 import { connect } from '../lib/supabase';
@@ -142,6 +143,8 @@ export default function SpaceApp() {
 }
 
 function Workspace({ client, userId }: { client: Client; userId: string }) {
+  const [memberAvatar, setMemberAvatar] = useState<MemberAvatar>(defaultAvatar);
+  const [avatarReadError, setAvatarReadError] = useState(false);
   const [onboarding, setOnboarding] = useState<CoupleOnboardingData | null>(null);
   const [roomStyle, setRoomStyle] = useState<RoomStyle | null>(null);
   const [space, setSpace] = useState<Space | null>(null);
@@ -157,6 +160,25 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
   const [exported, setExported] = useState(false);
   const [taskScope, setTaskScope] = useState('personal');
   const generation = useRef(0);
+
+  const refreshAvatar = useCallback(async () => {
+    const { data, error } = await client.rpc('get_member_avatar');
+    if (error) throw error;
+    setMemberAvatar(data as MemberAvatar);
+    setAvatarReadError(false);
+  }, [client]);
+
+  const saveAvatar = useCallback(async (appearance: AvatarAppearance) => {
+    const { data, error } = await client.rpc('save_member_avatar', {
+      chosen_silhouette: appearance.silhouette,
+      chosen_hair_style: appearance.hair_style,
+      chosen_hair_color: appearance.hair_color,
+      chosen_outfit: appearance.outfit,
+    });
+    if (error) throw error;
+    if (data !== 'saved') throw new Error(data === 'locked' ? 'Avatar option locked' : 'Invalid avatar option');
+    await refreshAvatar();
+  }, [client, refreshAvatar]);
 
   const refresh = useCallback(async () => {
     const current = ++generation.current;
@@ -196,6 +218,7 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
     const update = () => { void refresh().catch(() => setReadError(true)); };
     const invalidate = () => { generation.current++; };
     update();
+    void refreshAvatar().catch(() => setAvatarReadError(true));
     window.addEventListener('focus', update);
     const timer = window.setInterval(() => { if (!document.hidden) update(); }, 5000);
     return () => {
@@ -203,14 +226,14 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
       window.clearInterval(timer);
       window.removeEventListener('focus', update);
     };
-  }, [refresh]);
+  }, [refresh, refreshAvatar]);
 
   async function act(operation: () => Promise<void>) {
     setBusy(true);
     setMessage('');
     try {
       await operation();
-      await refresh();
+      await Promise.all([refresh(), refreshAvatar().catch(() => setAvatarReadError(true))]);
     } catch {
       setMessage('No se pudo completar la operación. Actualiza el espacio e inténtalo de nuevo.');
     } finally {
@@ -260,6 +283,7 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
       </nav>
       {message && <p role="status" className="notice">{message}</p>}
       {readError && <p role="status" className="notice">No se pudieron actualizar los datos. Comprueba tu conexión.</p>}
+      {avatarReadError && <p role="status" className="notice">No se pudo cargar la personalización del avatar. Comprueba si está aplicada la migración de avatares.</p>}
       {!loaded || readError ? (!readError && <p role="status">Cargando tu espacio…</p>) : tab === 'home' ? (
         <section className="panel">
           <h1>{hasHome ? 'Nuestra casa' : 'Crea su espacio'}</h1>
@@ -276,7 +300,8 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
                 <p role="status">{completed} de {homeTasks.length} tareas de la casa completadas</p>
                 {homeTasks.length > 0 && <progress aria-label="Progreso de tareas de la casa" value={completed} max={homeTasks.length} />}
               </div>
-              <Room key={space.id} userId={userId} completed={completed} palette={roomStyle?.palette ?? 'forest'} openTasks={() => setTab('tasks')} />
+              <Room key={space.id} completed={completed} palette={roomStyle?.palette ?? 'forest'} avatar={memberAvatar}
+                onAvatarChange={saveAvatar} openTasks={() => setTab('tasks')} />
               {canEditHome && roomStyle && (
                 <fieldset className="room-palettes" disabled={busy}>
                   <legend>Decoración de la casa</legend>
