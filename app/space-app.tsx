@@ -152,6 +152,7 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
   const [message, setMessage] = useState('');
   const [loaded, setLoaded] = useState(false);
   const [readError, setReadError] = useState(false);
+  const [onboardingError, setOnboardingError] = useState(false);
   const [busy, setBusy] = useState(false);
   const [exported, setExported] = useState(false);
   const [taskScope, setTaskScope] = useState('personal');
@@ -165,18 +166,23 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
       client.rpc('pending_partner'),
     ]);
     if (current !== generation.current) return;
-    const [style, introduction] = home.data && home.data.state !== 'waiting'
-      ? await Promise.all([
-        client.from('room_styles').select('palette,revision').eq('space_id', home.data.id).maybeSingle(),
-        client.rpc('get_couple_onboarding', { space_key: home.data.id }),
-      ])
-      : [null, null];
+    const introductionPromise = home.data
+      ? client.rpc('get_couple_onboarding', { space_key: home.data.id })
+      : null;
+    const stylePromise = home.data && home.data.state !== 'waiting'
+      ? client.from('room_styles').select('palette,revision').eq('space_id', home.data.id).maybeSingle()
+      : null;
+    const [style, introduction] = await Promise.all([
+      stylePromise ?? Promise.resolve(null),
+      introductionPromise ?? Promise.resolve(null),
+    ]);
     if (current !== generation.current) return;
     if (home.error || list.error || request.error) {
       setReadError(true);
       return;
     }
     setReadError(false);
+    setOnboardingError(Boolean(introduction?.error));
     setSpace(home.data);
     setOnboarding(introduction && !introduction.error ? introduction.data : null);
     setRoomStyle(style && !style.error ? style.data ?? defaultRoomStyle : null);
@@ -242,6 +248,7 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
 
   const hasHome = space?.state === 'paired' || space?.state === 'retained' || space?.state === 'separated';
   const canEditHome = hasHome && space.state !== 'separated';
+  const canEditCoupleProfile = Boolean(space && space.state !== 'separated');
   const homeTasks = tasks.filter((task) => task.space_id === space?.id);
   const completed = homeTasks.filter((task) => task.completed).length;
 
@@ -329,41 +336,53 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
               )}
             </>
           ) : (
-            <div className="pair-grid">
-              <div className="stack">
-                <h2>Invitar a mi pareja</h2>
-                <p>Comparte el código en privado. Caduca en 24 horas.</p>
-                {invite && <div className="invite-card">
-                  <span className="invite-caption">Código de invitación</span>
-                  <output className="invite" aria-label="Código de invitación">{invite}</output>
-                  <InvitationActions code={invite} />
-                </div>}
-                {pending && <button disabled={busy} onClick={() => void act(async () => {
-                  const { data, error } = await client.rpc('approve_partner', { expected_email: pending });
-                  if (error || !data) throw error ?? new Error('Request changed');
-                })}>Aceptar a {pending}</button>}
-                <button className={pending ? 'secondary' : undefined} disabled={busy} onClick={() => {
-                  if (pending && !window.confirm('Generar otro código cancelará la solicitud pendiente. ¿Continuar?')) return;
-                  void act(async () => {
-                    const { data, error } = await client.rpc('issue_invitation');
-                    if (error) throw error;
-                    if (typeof data !== 'string' || !/^\d{6}$/.test(data)) {
-                      setInvite('');
-                      setMessage('La base de datos aún genera códigos antiguos. Aplica la migración pendiente para habilitar códigos de 6 dígitos.');
-                      return;
-                    }
-                    setInvite(data);
-                  });
-                }}>{space ? 'Generar otro código' : 'Crear espacio y código'}</button>
+            <>
+              {space?.state === 'waiting' && onboardingError && <p role="status" className="notice">
+                No se pudo cargar tu presentación. Comprueba tu conexión y vuelve a cargar el espacio.
+              </p>}
+              {space?.state === 'waiting' && onboarding && <CoupleOnboarding key={space.id} data={onboarding} paired={false}
+                canEdit={canEditCoupleProfile} onSave={async (values) => {
+                  const { data, error } = await client.rpc('save_couple_onboarding', { space_key: space.id, ...values });
+                  if (error) throw error;
+                  await refresh();
+                  return data;
+                }} />}
+              <div className="pair-grid">
+                <div className="stack">
+                  <h2>Invitar a mi pareja</h2>
+                  <p>Comparte el código en privado. Caduca en 24 horas.</p>
+                  {invite && <div className="invite-card">
+                    <span className="invite-caption">Código de invitación</span>
+                    <output className="invite" aria-label="Código de invitación">{invite}</output>
+                    <InvitationActions code={invite} />
+                  </div>}
+                  {pending && <button disabled={busy} onClick={() => void act(async () => {
+                    const { data, error } = await client.rpc('approve_partner', { expected_email: pending });
+                    if (error || !data) throw error ?? new Error('Request changed');
+                  })}>Aceptar a {pending}</button>}
+                  <button className={pending ? 'secondary' : undefined} disabled={busy} onClick={() => {
+                    if (pending && !window.confirm('Generar otro código cancelará la solicitud pendiente. ¿Continuar?')) return;
+                    void act(async () => {
+                      const { data, error } = await client.rpc('issue_invitation');
+                      if (error) throw error;
+                      if (typeof data !== 'string' || !/^\d{6}$/.test(data)) {
+                        setInvite('');
+                        setMessage('La base de datos aún genera códigos antiguos. Aplica la migración pendiente para habilitar códigos de 6 dígitos.');
+                        return;
+                      }
+                      setInvite(data);
+                    });
+                  }}>{space ? 'Generar otro código' : 'Crear espacio y código'}</button>
+                </div>
+                {!space && <form onSubmit={join} className="stack">
+                  <h2>Unirme a un espacio</h2>
+                  <label>Código de invitación<input name="code" inputMode="numeric" autoComplete="one-time-code"
+                    pattern="[0-9]{6}" minLength={6} maxLength={6} placeholder="000000" aria-describedby="invite-code-help" required /></label>
+                  <p id="invite-code-help" className="field-hint">Escribe los 6 dígitos que te compartieron.</p>
+                  <button disabled={busy} className="secondary">Enviar solicitud</button>
+                </form>}
               </div>
-              {!space && <form onSubmit={join} className="stack">
-                <h2>Unirme a un espacio</h2>
-                <label>Código de invitación<input name="code" inputMode="numeric" autoComplete="one-time-code"
-                  pattern="[0-9]{6}" minLength={6} maxLength={6} placeholder="000000" aria-describedby="invite-code-help" required /></label>
-                <p id="invite-code-help" className="field-hint">Escribe los 6 dígitos que te compartieron.</p>
-                <button disabled={busy} className="secondary">Enviar solicitud</button>
-              </form>}
-            </div>
+            </>
           )}
         </section>
       ) : (

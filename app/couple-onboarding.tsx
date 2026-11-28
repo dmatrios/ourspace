@@ -66,7 +66,7 @@ export default function CoupleOnboarding({ data, paired, canEdit, onSave }: {
   onSave: (values: SaveIntroduction) => Promise<string>;
 }) {
   const mine = data.introductions.find((item) => item.is_mine);
-  const [draft, setDraft] = useState<Draft | null>(() => paired && !mine ? startDraft(data) : null);
+  const [draft, setDraft] = useState<Draft | null>(() => canEdit && !mine ? startDraft(data) : null);
   const [base, setBase] = useState({ date: data.relationship_since, revision: mine?.revision ?? 0 });
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
