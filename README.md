@@ -34,6 +34,14 @@ Cualquiera de las dos personas puede abandonar la casa. Conserva sus tareas priv
 
 La interfaz comprueba los cambios de la otra persona cada cinco segundos mientras la página está visible y también al recuperar el foco. Las operaciones de acceso se autorizan directamente en PostgreSQL.
 
+## Google Calendar
+
+La conexión de Calendar es individual. En Google Cloud, habilita **Google Calendar API**, configura la pantalla de consentimiento OAuth y crea un cliente OAuth de tipo **Aplicación web**. Añade `http://localhost:3000` y `https://ourspace-amber.vercel.app` como orígenes JavaScript autorizados. Si la app OAuth está en modo de prueba, añade las dos cuentas como usuarios de prueba. Copia el ID público del cliente a `NEXT_PUBLIC_GOOGLE_CLIENT_ID` en `.env.local` y en las variables de entorno de Vercel; reinicia el servidor local y redespliega producción.
+
+Cada persona pulsa **Conectar mi Google Calendar** en Tareas. Our Space sincroniza las tareas pendientes que tienen fecha en el calendario principal de esa persona: evento a las 9:00 a. m. de Lima y recordatorio emergente 30 minutos antes. Los cambios se sincronizan mientras la app está abierta y conectada. El acceso temporal vive solo en la memoria del navegador; al volver en otra sesión hay que reconectar. **Revocar acceso** elimina la autorización de Google, pero conserva los eventos que ya se crearon.
+
+Consulta la [configuración oficial de OAuth web](https://developers.google.com/identity/oauth2/web/guides/get-google-api-clientid) y la [API de eventos de Calendar](https://developers.google.com/workspace/calendar/api/v3/reference/events/insert).
+
 ## Verificación
 
 ```sh

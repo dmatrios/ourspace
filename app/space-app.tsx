@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import CoupleOnboarding, { type CoupleOnboardingData } from './couple-onboarding';
+import GoogleCalendar from './google-calendar';
 import { defaultAvatar, type AvatarAppearance, type MemberAvatar } from './avatar';
 import InvitationActions from './invitation-actions';
 import PixelSelect, { type PixelSelectOption } from './pixel-select';
@@ -248,11 +249,12 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
     const update = () => { void refresh().catch(() => setReadError(true)); };
     const invalidate = () => { generation.current++; };
     update();
-    void refreshAvatar().catch(() => setAvatarReadError(true));
+    const avatarTimer = window.setTimeout(() => { void refreshAvatar().catch(() => setAvatarReadError(true)); }, 0);
     window.addEventListener('focus', update);
     const timer = window.setInterval(() => { if (!document.hidden) update(); }, 5000);
     return () => {
       invalidate();
+      window.clearTimeout(avatarTimer);
       window.clearInterval(timer);
       window.removeEventListener('focus', update);
     };
@@ -344,6 +346,9 @@ function Workspace({ client, userId }: { client: Client; userId: string }) {
         <button aria-pressed={tab === 'home'} onClick={() => setTab('home')}>Casa</button>
         <button aria-pressed={tab === 'tasks'} onClick={() => setTab('tasks')}>Tareas</button>
       </nav>
+      <div className="calendar-panel" hidden={tab !== 'tasks' || !loaded || readError}>
+        <GoogleCalendar userId={userId} tasks={tasks} />
+      </div>
       {message && <p role="status" className="notice">{message}</p>}
       {readError && <p role="status" className="notice">No se pudieron actualizar los datos. Comprueba tu conexión.</p>}
       {avatarReadError && <p role="status" className="notice">No se pudo cargar la personalización del avatar. Comprueba si está aplicada la migración de avatares.</p>}
